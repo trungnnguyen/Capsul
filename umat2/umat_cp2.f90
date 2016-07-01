@@ -43,6 +43,13 @@
     dfGrdMech0 = dfGrd0*matInv(dfGrdTh0)
     dfGrdMech1 = dfGrd1*matInv(dfGrdTh1)
 
+    write(*, *) "dfGrdTH0 = ", dfGrdTh0
+    write(*, *) "dfGrdTH1 = ", dfGrdTh1
+    write(*, *) "dfGrd1   = ", dfGrd1
+    write(*, *) "dfGrdMe1 = ", dfGrdMech1
+
+!    dfGrdMech0 = dfGrd0
+!    dfGrdMech1 = dfGrd1
     call UpdStress(dfGrdMech0, dfGrdMech1, statev0, statev, nstatv, phase, temp1, dtime,        &
                    stress, ntens, rpl, pNewDt)
                

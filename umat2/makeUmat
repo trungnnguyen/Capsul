@@ -1,0 +1,17 @@
+#! /bin/bash
+rm -fr *-std.o *.mod
+DIR="${HOME}/workspace/abaqus/usrlib"
+SRC="utils.f90 algebra.f90  deformation.f90 hardening.f90 crystal.f90 	
+		 expansion.f90 init.f90 umat_cp2.f90"
+MAIN="capsul.f"
+FC="gfortran"
+CPFLAGS="-c  -O3 -fPIC -std=f2003 -ffree-form -fopt-info
+         -fmax-errors=1 -fbounds-check"
+#         -Wall -Werror -fmax-errors=1 -fbounds-check"
+for SRCFILE in $SRC
+do
+  ${FC} ${CPFLAGS} ${SRCFILE} -o ${SRCFILE%.*}-std.o
+done
+rm -fr ${DIR}/*.o ${DIR}/*.so
+mv *std.o ${DIR}
+abaqus make library=${MAIN%.*} directory=${DIR}

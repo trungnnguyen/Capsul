@@ -11,8 +11,8 @@
     ! Explicit Declaration of arguments called by ABAQUS
     include 'umatArgs.inc'
 
-    if (CMNAME(1:8) == "UMAT_CP2") then
-      call umat_cp2(STRESS, STATEV, DDSDDE, SSE, SPD, SCD,                            &  
+    if (CMNAME(1:8) == "UMAT_CP1") then
+      call umat_cp1(STRESS, STATEV, DDSDDE, SSE, SPD, SCD,                            &  
                     RPL, DDSDDT, DRPLDE, DRPLDT,                                      &
                     STRAN, DSTRAN, TIME, DTIME, TEMP, DTEMP, PREDEF, DPRED, CMNAME,   &
                     NDI, NSHR, NTENS, NSTATV, PROPS, NPROPS, COORDS, DROT, PNEWDT,    &

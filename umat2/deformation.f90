@@ -1,4 +1,3 @@
-
   module deformation
     use utils
 
@@ -43,19 +42,6 @@
       end do
 
     end function fElasStress
-
-
-
-    function fDfGrdTh(thExpdCoef, dtemp)
-      
-      real(kind = RKIND), intent(in) :: thExpdCoef
-      real(kind = RKIND), intent(in) :: dtemp
-      real(kind = RKIND) :: fDfGrdTh(3, 3)
-
-      fDfGrdTh = thExpdCoef*dtemp*UNITMAT
-
-    end function fDfGrdTh
-
 
 
 

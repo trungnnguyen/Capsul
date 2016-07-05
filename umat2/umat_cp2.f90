@@ -5,9 +5,9 @@
                       NDI, NSHR, NTENS, NSTATV, PROPS, NPROPS, COORDS, DROT, PNEWDT,    &
                       CELENT, DFGRD0, DFGRD1, NOEL, NPT, LAYER, KSPT, KSTEP, KINC)
 
-    use utils, only : IKIND, RKIND, UPDSIG, UPDJAC
-    use algebra, only : matInv
-    use init,  only : initialized, Initialization
+    use utils,     only : IKIND, RKIND, UPDSIG, UPDJAC
+    use algebra,   only : matInv
+    use init,      only : initialized, Initialization
     use expansion, only : fDfGrdTh
     implicit none
 
@@ -22,8 +22,8 @@
     real(kind = RKIND)    :: temp1
     real(kind = RKIND)    :: dfGrdTh0(3, 3)
     real(kind = RKIND)    :: dfGrdTh1(3, 3)
-    real(kind = RKIND)    :: dfGrdMech0(3, 3)
-    real(kind = RKIND)    :: dfGrdMech1(3, 3)
+    real(kind = RKIND)    :: dfGrdMe0(3, 3)
+    real(kind = RKIND)    :: dfGrdMe1(3, 3)
 
     ! Global Initialization. Executed only once.
     if (.not. initialized) then
@@ -34,23 +34,16 @@
 
 
     ! Update the Cauchy stress tensor
-    phase = UPDSIG
-    statev0 = statev
-    temp0 = temp
-    temp1 = temp + dtemp
+    phase    = UPDSIG
+    statev0  = statev
+    temp0    = temp
+    temp1    = temp + dtemp
     dfGrdTh0 = fDfGrdTh(temp0)
     dfGrdTh1 = fDfGrdTh(temp1)
-    dfGrdMech0 = dfGrd0*matInv(dfGrdTh0)
-    dfGrdMech1 = dfGrd1*matInv(dfGrdTh1)
+    dfGrdMe0 = matmul(dfGrd0, matInv(dfGrdTh0))
+    dfGrdMe1 = matmul(dfGrd1, matInv(dfGrdTh1))
 
-    write(*, *) "dfGrdTH0 = ", dfGrdTh0
-    write(*, *) "dfGrdTH1 = ", dfGrdTh1
-    write(*, *) "dfGrd1   = ", dfGrd1
-    write(*, *) "dfGrdMe1 = ", dfGrdMech1
-
-!    dfGrdMech0 = dfGrd0
-!    dfGrdMech1 = dfGrd1
-    call UpdStress(dfGrdMech0, dfGrdMech1, statev0, statev, nstatv, phase, temp1, dtime,        &
+    call UpdStress(dfGrdMe0, dfGrdMe1, statev0, statev, nstatv, phase, temp1, dtime,        &
                    stress, ntens, rpl, pNewDt)
                
     if (pNewDt < 1.0d0) return
@@ -58,7 +51,7 @@
 
     ! Update the jacob matrix -- ddsdde
     phase = UPDJAC
-    call UpdJacob (dfGrdMech0, dfGrdMech1, statev0, statev, nstatv, phase, temp1, dtime,        & 
+    call UpdJacob (dfGrdMe0, dfGrdMe1, statev0, statev, nstatv, phase, temp1, dtime,        & 
                    stress, ntens, ddsdde, pNewDt)
 
 
@@ -68,8 +61,8 @@
 
   subroutine UpdStress(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp, dtime,    &
                        stress, ntens, rpl, pNewDt)
-    use utils,     only : IKIND,  RKIND, UPDSIG, UPDJAC
-    use init,      only : nSlipSys
+    use utils, only : IKIND,  RKIND, UPDSIG, UPDJAC
+    use init,  only : nSlipSys
 
     implicit none
 
@@ -85,7 +78,6 @@
     real(kind = RKIND),    intent(out) :: stress(ntens)
     real(kind = RKIND),    intent(out) :: rpl
     real(kind = RKIND),    intent(out) :: pNewDt
-
  
     real(kind = RKIND) :: iterVec(nSlipSys+9)
     real(kind = RKIND) :: workArray(nSlipSys*8+100)
@@ -105,10 +97,10 @@
 
 
   subroutine InitIterVec(dfGrd0, dfGrd1, statev0, statev1, nstatv, phase, temp, dtime, iterVec, workArray)
-    use utils,       only : IKIND,  RKIND, UNITMAT, UPDSIG, UPDJAC
-    use algebra,     only : matInv, ten4Rot, polarDcmp
-    use init,        only : nSlipSys, oriMatx, schmidt
-    use crystal,     only : fStifLoc
+    use utils,     only : IKIND,  RKIND, UNITMAT, UPDSIG, UPDJAC
+    use algebra,   only : matInv, ten4Rot, polarDcmp
+    use init,      only : nSlipSys, oriMatx, schmidt
+    use crystal,   only : fStifLoc
 
     implicit none
 
@@ -124,30 +116,30 @@
     real(kind = RKIND),    intent(out) :: workArray(nSlipSys*8+100)
 
 
-    real(kind = RKIND) ::  dfGrdEls0(3, 3)
-    real(kind = RKIND) ::  dfGrdEls1(3, 3)
-    real(kind = RKIND) ::  dGamma(nSlipSys)
-    real(kind = RKIND) ::  dGamma0(nSlipSys)
-    real(kind = RKIND) ::  dGamma1(nSlipSys)
-    real(kind = RKIND) ::  gamma(nSlipSys)
-    real(kind = RKIND) ::  gamma0(nSlipSys)
-    real(kind = RKIND) ::  gamma1(nSlipSys)
-    real(kind = RKIND) ::  tauCrit(nSlipSys)
-    real(kind = RKIND) ::  tauCrit0(nSlipSys)
-    real(kind = RKIND) ::  tauCrit1(nSlipSys)
-    real(kind = RKIND) ::  Lp0(3, 3)
-    real(kind = RKIND) ::  Lp1(3, 3)
+    real(kind = RKIND) :: dfGrdEls0(3, 3)
+    real(kind = RKIND) :: dfGrdEls1(3, 3)
+    real(kind = RKIND) :: dGamma(nSlipSys)
+    real(kind = RKIND) :: dGamma0(nSlipSys)
+    real(kind = RKIND) :: dGamma1(nSlipSys)
+    real(kind = RKIND) :: gamma(nSlipSys)
+    real(kind = RKIND) :: gamma0(nSlipSys)
+    real(kind = RKIND) :: gamma1(nSlipSys)
+    real(kind = RKIND) :: tauCrit(nSlipSys)
+    real(kind = RKIND) :: tauCrit0(nSlipSys)
+    real(kind = RKIND) :: tauCrit1(nSlipSys)
+    real(kind = RKIND) :: Lp0(3, 3)
+    real(kind = RKIND) :: Lp1(3, 3)
 
-    real(kind = RKIND) ::  dfGrd0Inv(3, 3)
-    real(kind = RKIND) ::  dfGrdInc(3, 3)
-    real(kind = RKIND) ::  dfGrdEls(3, 3)
-    real(kind = RKIND) ::  dfGrdElsPrd(3, 3)
-    real(kind = RKIND) ::  dfGrdElsPrdInv(3, 3)
-    real(kind = RKIND) ::  dfGrdElsPrdLarDef(3, 3)
-    real(kind = RKIND) ::  UU(3, 3)
-    real(kind = RKIND) ::  RR(3, 3)
-    real(kind = RKIND) ::  stiffLoc(3, 3, 3, 3)
-    real(kind = RKIND) ::  stiffGlb(3, 3, 3, 3)
+    real(kind = RKIND) :: dfGrd0Inv(3, 3)
+    real(kind = RKIND) :: dfGrdInc(3, 3)
+    real(kind = RKIND) :: dfGrdEls(3, 3)
+    real(kind = RKIND) :: dfGrdElsPrd(3, 3)
+    real(kind = RKIND) :: dfGrdElsPrdInv(3, 3)
+    real(kind = RKIND) :: dfGrdElsPrdLarDef(3, 3)
+    real(kind = RKIND) :: UU(3, 3)
+    real(kind = RKIND) :: RR(3, 3)
+    real(kind = RKIND) :: stiffLoc(3, 3, 3, 3)
+    real(kind = RKIND) :: stiffGlb(3, 3, 3, 3)
 
 
     dfGrd0Inv = matInv(dfGrd0)
@@ -198,12 +190,12 @@
 
     implicit none
 
-    real(kind = RKIND),    intent(inout)  :: iterVec(nSlipSys+9)
-    real(kind = RKIND),    intent(inout)  :: workArray(nSlipSys*8+100)
-    integer(kind = IKIND), intent(in)     :: phase
-    real(kind = RKIND),    intent(in)     :: temp
-    real(kind = RKIND),    intent(in)     :: dtime
-    real(kind = RKIND),    intent(out)    :: pNewDt
+    real(kind = RKIND),    intent(inout) :: iterVec(nSlipSys+9)
+    real(kind = RKIND),    intent(inout) :: workArray(nSlipSys*8+100)
+    integer(kind = IKIND), intent(in)    :: phase
+    real(kind = RKIND),    intent(in)    :: temp
+    real(kind = RKIND),    intent(in)    :: dtime
+    real(kind = RKIND),    intent(out)   :: pNewDt
 
     ! local variables
     real(kind = RKIND), parameter :: BIGNORM = 1.0d10
@@ -276,10 +268,10 @@
 
     implicit none
 
-    real(kind = RKIND), intent(inout)  :: iterVec(nSlipSys+9)
-    real(kind = RKIND), intent(in)     :: iterVecInc(nSlipSys+9)
-    real(kind = RKIND), intent(inout)  :: workArray(nSlipSys*8+100)
-    real(kind = RKIND), intent(in)     :: temp
+    real(kind = RKIND), intent(inout) :: iterVec(nSlipSys+9)
+    real(kind = RKIND), intent(in)    :: iterVecInc(nSlipSys+9)
+    real(kind = RKIND), intent(inout) :: workArray(nSlipSys*8+100)
+    real(kind = RKIND), intent(in)    :: temp
 
     real(kind = RKIND) :: gamma0(nSlipSys)
     real(kind = RKIND) :: tauCrit0(nSlipSys)
@@ -632,14 +624,14 @@
     if (phase == UPDSIG) then
       tauResl    = fTauResl(sKirchRot, schmidt)
       gammaDot   = workArray(101+nSlipSys*7: 100+nSlipSys*8)
-      rpl        = disFrc*sum(tauResl*gammaDot)
+      rpl        = disFrc*sum(abs(tauResl*gammaDot))
 
       dGammaNew  = iterVec(10:9+nSlipSys)
       gammaNew   = workArray(101+nSlipSys*2: 100+nSlipSys*3)
       tauCritNew = workArray(101+nSlipSys*3: 100+nSlipSys*4) 
 
       dfGrdElsPrdInv = reshape(workArray(82:90), (/3, 3/))
-      LpNew = (UNITMAT - matmul(dfGrdElsPrdInv, dfGrdElsNew))/dtime
+      LpNew      = (UNITMAT - matmul(dfGrdElsPrdInv, dfGrdElsNew))/dtime
       EulerAng   = 0.0d0
 
       call saveStatev(statev, nstatv, dfGrdElsNew, dGammaNew, gammaNew, tauCritNew, LpNew, EulerAng)

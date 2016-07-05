@@ -19,7 +19,6 @@ module utils
 
 
   integer(kind = IKIND), parameter :: MAX_SLIP_SYSTEMS = 30
-  integer(kind = IKIND), parameter :: MAX_POLY_ORDER   = 5
 
   integer(kind = IKIND), parameter :: UPDSIG = 1
   integer(kind = IKIND), parameter :: UPDJAC = 2

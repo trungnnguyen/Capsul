@@ -47,8 +47,8 @@
 
   subroutine UpdStress(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp, dtime,    &
                        stress, ntens, rpl, pNewDt)
-    use utils,     only : IKIND,  RKIND, UPDSIG, UPDJAC
-    use init,      only : nSlipSys
+    use utils, only : IKIND,  RKIND, UPDSIG, UPDJAC
+    use init,  only : nSlipSys
 
     implicit none
 
@@ -84,10 +84,10 @@
 
 
   subroutine InitIterVec(dfGrd0, dfGrd1, statev0, statev1, nstatv, phase, temp, dtime, iterVec, workArray)
-    use utils,       only : IKIND,  RKIND, UNITMAT, UPDSIG, UPDJAC
-    use algebra,     only : matInv, ten4Rot, polarDcmp
-    use init,        only : nSlipSys, oriMatx, schmidt
-    use crystal,     only : fStifLoc
+    use utils,     only : IKIND,  RKIND, UNITMAT, UPDSIG, UPDJAC
+    use algebra,   only : matInv, ten4Rot, polarDcmp
+    use init,      only : nSlipSys, oriMatx, schmidt
+    use crystal,   only : fStifLoc
 
     implicit none
 
@@ -103,30 +103,30 @@
     real(kind = RKIND),    intent(out) :: workArray(nSlipSys*8+100)
 
 
-    real(kind = RKIND) ::  dfGrdEls0(3, 3)
-    real(kind = RKIND) ::  dfGrdEls1(3, 3)
-    real(kind = RKIND) ::  dGamma(nSlipSys)
-    real(kind = RKIND) ::  dGamma0(nSlipSys)
-    real(kind = RKIND) ::  dGamma1(nSlipSys)
-    real(kind = RKIND) ::  gamma(nSlipSys)
-    real(kind = RKIND) ::  gamma0(nSlipSys)
-    real(kind = RKIND) ::  gamma1(nSlipSys)
-    real(kind = RKIND) ::  tauCrit(nSlipSys)
-    real(kind = RKIND) ::  tauCrit0(nSlipSys)
-    real(kind = RKIND) ::  tauCrit1(nSlipSys)
-    real(kind = RKIND) ::  Lp0(3, 3)
-    real(kind = RKIND) ::  Lp1(3, 3)
+    real(kind = RKIND) :: dfGrdEls0(3, 3)
+    real(kind = RKIND) :: dfGrdEls1(3, 3)
+    real(kind = RKIND) :: dGamma(nSlipSys)
+    real(kind = RKIND) :: dGamma0(nSlipSys)
+    real(kind = RKIND) :: dGamma1(nSlipSys)
+    real(kind = RKIND) :: gamma(nSlipSys)
+    real(kind = RKIND) :: gamma0(nSlipSys)
+    real(kind = RKIND) :: gamma1(nSlipSys)
+    real(kind = RKIND) :: tauCrit(nSlipSys)
+    real(kind = RKIND) :: tauCrit0(nSlipSys)
+    real(kind = RKIND) :: tauCrit1(nSlipSys)
+    real(kind = RKIND) :: Lp0(3, 3)
+    real(kind = RKIND) :: Lp1(3, 3)
 
-    real(kind = RKIND) ::  dfGrd0Inv(3, 3)
-    real(kind = RKIND) ::  dfGrdInc(3, 3)
-    real(kind = RKIND) ::  dfGrdEls(3, 3)
-    real(kind = RKIND) ::  dfGrdElsPrd(3, 3)
-    real(kind = RKIND) ::  dfGrdElsPrdInv(3, 3)
-    real(kind = RKIND) ::  dfGrdElsPrdLarDef(3, 3)
-    real(kind = RKIND) ::  UU(3, 3)
-    real(kind = RKIND) ::  RR(3, 3)
-    real(kind = RKIND) ::  stiffLoc(3, 3, 3, 3)
-    real(kind = RKIND) ::  stiffGlb(3, 3, 3, 3)
+    real(kind = RKIND) :: dfGrd0Inv(3, 3)
+    real(kind = RKIND) :: dfGrdInc(3, 3)
+    real(kind = RKIND) :: dfGrdEls(3, 3)
+    real(kind = RKIND) :: dfGrdElsPrd(3, 3)
+    real(kind = RKIND) :: dfGrdElsPrdInv(3, 3)
+    real(kind = RKIND) :: dfGrdElsPrdLarDef(3, 3)
+    real(kind = RKIND) :: UU(3, 3)
+    real(kind = RKIND) :: RR(3, 3)
+    real(kind = RKIND) :: stiffLoc(3, 3, 3, 3)
+    real(kind = RKIND) :: stiffGlb(3, 3, 3, 3)
 
 
     dfGrd0Inv = matInv(dfGrd0)
@@ -173,17 +173,17 @@
 
   subroutine NRSolve(iterVec, workArray,  phase, temp, dtime, pNewDt)
     use utils,     only : RKIND, IKIND, LKIND, UPDSIG, UPDJAC
-    use algebra,   only : vecNorm, GaussJordan, gauss
+    use algebra,   only : vecNorm, GaussJordan
     use init,      only : nSlipSys, maxIters, toler, maxItersJac, tolerJac
 
     implicit none
 
-    real(kind = RKIND),    intent(inout)  :: iterVec(nSlipSys+9)
-    real(kind = RKIND),    intent(inout)  :: workArray(nSlipSys*8+100)
-    integer(kind = IKIND), intent(in)     :: phase
-    real(kind = RKIND),    intent(in)     :: temp
-    real(kind = RKIND),    intent(in)     :: dtime
-    real(kind = RKIND),    intent(out)    :: pNewDt
+    real(kind = RKIND),    intent(inout) :: iterVec(nSlipSys+9)
+    real(kind = RKIND),    intent(inout) :: workArray(nSlipSys*8+100)
+    integer(kind = IKIND), intent(in)    :: phase
+    real(kind = RKIND),    intent(in)    :: temp
+    real(kind = RKIND),    intent(in)    :: dtime
+    real(kind = RKIND),    intent(out)   :: pNewDt
 
     ! local variables
     real(kind = RKIND), parameter :: BIGNORM = 1.0d10
@@ -213,7 +213,7 @@
     processed = .false.
     do while (iter <= nIters)
       call CalRes(iterVec, temp, dtime, bigRes, workArray, pNewDt)
-      if (pNewDt < 0.999d0) return
+      if (pNewDt < 1.0d0) return
       normRes = vecNorm(bigRes)
       if (normRes <= iterTol) exit
 
@@ -257,10 +257,10 @@
 
     implicit none
 
-    real(kind = RKIND), intent(inout)  :: iterVec(nSlipSys+9)
-    real(kind = RKIND), intent(in)     :: iterVecInc(nSlipSys+9)
-    real(kind = RKIND), intent(inout)  :: workArray(nSlipSys*8+100)
-    real(kind = RKIND), intent(in)     :: temp
+    real(kind = RKIND), intent(inout) :: iterVec(nSlipSys+9)
+    real(kind = RKIND), intent(in)    :: iterVecInc(nSlipSys+9)
+    real(kind = RKIND), intent(inout) :: workArray(nSlipSys*8+100)
+    real(kind = RKIND), intent(in)    :: temp
 
     real(kind = RKIND) :: gamma0(nSlipSys)
     real(kind = RKIND) :: tauCrit0(nSlipSys)
@@ -614,14 +614,14 @@
     if (phase == UPDSIG) then
       tauResl    = fTauResl(sKirchRot, schmidt)
       gammaDot   = workArray(101+nSlipSys*7: 100+nSlipSys*8)
-      rpl        = disFrc*sum(tauResl*gammaDot)
+      rpl        = disFrc*sum(abs(tauResl*gammaDot))
 
       dGammaNew  = iterVec(10:9+nSlipSys)
       gammaNew   = workArray(101+nSlipSys*2: 100+nSlipSys*3)
       tauCritNew = workArray(101+nSlipSys*3: 100+nSlipSys*4) 
 
       dfGrdElsPrdInv = reshape(workArray(82:90), (/3, 3/))
-      LpNew = (UNITMAT - matmul(dfGrdElsPrdInv, dfGrdElsNew))/dtime
+      LpNew      = (UNITMAT - matmul(dfGrdElsPrdInv, dfGrdElsNew))/dtime
       EulerAng   = 0.0d0
 
       call saveStatev(statev, nstatv, dfGrdElsNew, dGammaNew, gammaNew, tauCritNew, LpNew, EulerAng)
@@ -695,7 +695,6 @@
         stiffLoc = fStifLoc(temp)
         stiffGlb = ten4Rot(stiffLoc, transpose(oriMatx))
         ddsdde = ten3333ToA66(stiffGlb)
-        write(*, *) "pNewDt < 1.0d0"
         exit
       else
         ddsdde(:, iStep) = (stressJac - stress)/epsInc

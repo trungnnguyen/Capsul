@@ -182,18 +182,18 @@
       real(kind = RKIND), intent(in) :: temp
       real(kind = RKIND) :: fGammaDot(nSlipSys)
 
-      real(kind = RKIND) :: aux
+      real(kind = RKIND) :: factor
       integer :: i
 
     
       if (temp > SMALL) then
-        aux = exp(-qActive/temp)
+        factor = exp(-qActive/temp)
       else
-        aux = 1.0d0
+        factor = 1.0d0
       end if
 
       do i = 1, nSlipSys
-        fGammaDot(i) = gammaDot0*tauSign(i)*tauRatio(i)**mmInv*aux
+        fGammaDot(i) = factor*gammaDot0*tauSign(i)*tauRatio(i)**mmInv
       end do
      
     end function fGammaDot
@@ -201,16 +201,24 @@
 
     ! derivatives of gammaDot with respect to tauCrit in each slip systems
     function fGammaDotDDTauCrit(tauRatio, tauCrit, temp)
-      
+      use utils, only : SMALL
+
       real(kind = RKIND), intent(in) :: tauRatio(nSlipSys)
       real(kind = RKIND), intent(in) :: tauCrit(nSlipSys)
       real(kind = RKIND), intent(in) :: temp
       real(kind = RKIND) :: fGammaDotDDTauCrit(nSlipSys)
 
+      real(kind = RKIND) :: factor
       integer :: i
 
+      if (temp > SMALL) then
+        factor = exp(-qActive/temp)
+      else
+        factor = 1.0d0
+      end if
+
       do i = 1, nSlipSys
-        fGammaDotDDTauCrit(i) = gammaDot0MMInv*tauRatio(i)**(MMInv - 1)/tauCrit(i)
+        fGammaDotDDTauCrit(i) = factor*gammaDot0MMInv*tauRatio(i)**(MMInv - 1)/tauCrit(i)
       end do
 
     end function fGammaDotDDTauCrit 
@@ -242,8 +250,7 @@
     end function fTauResl
 
 
-    ! Calculate the plastic velocity gradients Lp with the shear strain rate
-    ! gammaDot
+    ! Calculate the plastic velocity gradients Lp with the shear strain rate gammaDot
     function fLp(gammaDot, schmidt)
 
       real(kind = RKIND), intent(in) :: gammaDot(nSlipSys)

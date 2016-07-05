@@ -25,13 +25,14 @@
       use utils,     only : CRYS_FILE_NAME, CRYS_FILE_ID, ReadLine
       use algebra,   only : matRot
       use crystal,   only : InitCrysParas
-      use expansion, only : ReadExpansion
   
       implicit none
       ! interface arguments
       real(kind = RKIND),    intent(in)  :: props(6)
   
       ! local variables
+      real(kind = RKIND)    :: orientMatrix(3, 3)
+      integer(kind = IKIND) :: numSlipSystems
       real(kind = RKIND)    :: schmidtLoc(3, 3, MAX_SLIP_SYSTEMS)
 
       character(len = 80)   :: outDir, fileName
@@ -52,7 +53,6 @@
         schmidt(:, :, ii) = matRot(schmidtLoc(:, :, ii), transpose(oriMatx))
       end do
   
-      call ReadExpansion(CRYS_FILE_ID)
 
       call ReadLine(CRYS_FILE_ID, line)
       read(line, *) toler, tolerJac, maxIters, maxItersJac, epsInc

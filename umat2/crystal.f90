@@ -7,7 +7,7 @@
     public  :: InitCrysParas
     public  :: fStifLoc
     public  :: fGammaDot
-    public  :: fGammaDotDDTauCrit
+    public  :: fDGammaDotDTauRatio
     public  :: fStressDiverged
     public  :: fTauResl
     public  :: fLp
@@ -174,14 +174,15 @@
 
     
 
-    function fGammaDot(tauRatio, tauSign, temp)
+    function fGammaDot(tauRatio, temp)
       use utils, only : SMALL
 
       real(kind = RKIND), intent(in) :: tauRatio(nSlipSys)
-      real(kind = RKIND), intent(in) :: tauSign(nSlipSys)
       real(kind = RKIND), intent(in) :: temp
       real(kind = RKIND) :: fGammaDot(nSlipSys)
 
+      real(kind = RKIND) :: tauRatioSign(nSlipSys)
+      real(kind = RKIND) :: absTauRatio(nSlipSys)
       real(kind = RKIND) :: factor
       integer :: i
 
@@ -192,22 +193,24 @@
         factor = 1.0d0
       end if
 
+      tauRatioSign = sign(1.0d0, tauRatio)
+      absTauRatio  = abs(tauRatio)
       do i = 1, nSlipSys
-        fGammaDot(i) = factor*gammaDot0*tauSign(i)*tauRatio(i)**mmInv
+        fGammaDot(i) = factor*gammaDot0*tauRatioSign(i)*absTauRatio(i)**mmInv
       end do
      
     end function fGammaDot
 
 
     ! derivatives of gammaDot with respect to tauCrit in each slip systems
-    function fGammaDotDDTauCrit(tauRatio, tauCrit, temp)
+    function fDGammaDotDTauRatio(tauRatio, temp)
       use utils, only : SMALL
 
       real(kind = RKIND), intent(in) :: tauRatio(nSlipSys)
-      real(kind = RKIND), intent(in) :: tauCrit(nSlipSys)
       real(kind = RKIND), intent(in) :: temp
-      real(kind = RKIND) :: fGammaDotDDTauCrit(nSlipSys)
+      real(kind = RKIND) :: fDGammaDotDTauRatio(nSlipSys)
 
+      real(kind = RKIND) :: absTauRatio(nSlipSys)
       real(kind = RKIND) :: factor
       integer :: i
 
@@ -217,11 +220,13 @@
         factor = 1.0d0
       end if
 
+      absTauRatio  = abs(tauRatio)
       do i = 1, nSlipSys
-        fGammaDotDDTauCrit(i) = factor*gammaDot0MMInv*tauRatio(i)**(MMInv - 1)/tauCrit(i)
+        fDGammaDotDTauRatio(i) = factor*gammaDot0MMInv*absTauRatio(i)**(MMInv - 1)
       end do
 
-    end function fGammaDotDDTauCrit 
+
+    end function fDGammaDotDTauRatio
 
 
 
@@ -229,7 +234,7 @@
       real(kind = RKIND), intent(in) :: tauRatio(nSlipSys)
       logical(kind = LKIND) :: fStressDiverged
 
-      fStressDiverged = any(tauRatio > mmBig)
+      fStressDiverged = any(abs(tauRatio) > mmBig)
 
     end function fStressDiverged
 

@@ -27,7 +27,7 @@
 !    ddsddt = 3.0d3
 
     if (npt == 1) then
-!      write(*, *) "In umat   incr = ", Kinc, " temp = ", temp, " dtemp = ", dtemp
+      write(*, *) "In umat   incr = ", Kinc, " temp = ", temp, " dtemp = ", dtemp
     end if
 
   end subroutine umat

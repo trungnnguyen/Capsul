@@ -12,10 +12,10 @@
 
     real(kind = RKIND)    :: schmidt(3, 3, MAX_SLIP_SYSTEMS)
 
-    integer(kind = IKIND) :: maxIters
     real(kind = RKIND)    :: toler
-    integer(kind = IKIND) :: maxItersJac
     real(kind = RKIND)    :: tolerJac
+    integer(kind = IKIND) :: maxIters
+    integer(kind = IKIND) :: maxItersJac
     real(kind = RKIND)    :: epsInc
  
   contains
@@ -25,6 +25,7 @@
       use utils,     only : CRYS_FILE_NAME, CRYS_FILE_ID, ReadLine
       use algebra,   only : matRot
       use crystal,   only : InitCrysParas
+      use expansion, only : ReadExpansion
   
       implicit none
       ! interface arguments
@@ -32,7 +33,6 @@
   
       ! local variables
       real(kind = RKIND)    :: orientMatrix(3, 3)
-      integer(kind = IKIND) :: numSlipSystems
       real(kind = RKIND)    :: schmidtLoc(3, 3, MAX_SLIP_SYSTEMS)
 
       character(len = 80)   :: outDir, fileName
@@ -54,8 +54,11 @@
       end do
   
 
+      call ReadExpansion(CRYS_FILE_ID)
+
       call ReadLine(CRYS_FILE_ID, line)
       read(line, *) toler, tolerJac, maxIters, maxItersJac, epsInc
+
   
       close(unit = CRYS_FILE_ID)
   

@@ -6,21 +6,21 @@
     contains
 
   
-    pure elemental function secah(x)
+    pure elemental function sech(x)
 
       real(kind = RKIND), intent(in)  :: x
-      real(kind = RKIND) :: secah
+      real(kind = RKIND) :: sech
 
       real(kind = RKIND) :: tmp
 
       if(dabs(x) > 50.0d0) then
-        secah = 0.0d0
+        sech = 0.0d0
       else
         tmp   = dexp(x)
-        secah = 2.0d0/(tmp + 1.0/tmp)
+        sech = 2.0d0/(tmp + 1.0/tmp)
       endif
 
-    end function secah
+    end function sech
 
 
     function polynomial(coef, x)
@@ -409,8 +409,7 @@
 
       tmp1 = invars(1)*invars(1)
       b = invars(2) - tmp1/3.0d0
-      c = -2.0d0/27.0d0*tmp1*invars(1)         &
-        + invars(1)*invars(2)/3.0d0 - invars(3)
+      c = -2.0d0/27.0d0*tmp1*invars(1) + invars(1)*invars(2)/3.0d0 - invars(3)
 
       if(dabs(b) < 1.0d-15) then
         x = -c**(1.0d0/3.0d0)

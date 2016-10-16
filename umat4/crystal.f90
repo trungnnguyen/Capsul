@@ -53,7 +53,7 @@
       real(kind = RKIND)    :: c11, c12, c44, c33, c13, c66
 
       integer(kind = IKIND)  :: nOrder
-      character(len = 100)   :: line
+      character(len = 256)   :: line
       character(len = 10)    :: crysType
       integer(kind = IKIND)  :: ii, istat
 
@@ -69,6 +69,16 @@
 
         normVec(1:3, 1:nSlipSys) = FCC_SLIP_VECTOR(1:3, 1:nSlipSys)
         slipVec(1:3, 1:nSlipSys) = FCC_SLIP_VECTOR(4:6, 1:nSlipSys)
+      else if (crysType(1:4) == "user") then
+        call ReadLine(fID, line)
+        read(line, *, iostat=istat) nSlipSets, nSlipSys
+        do ii = 1, nSlipSys
+          call ReadLine(fID, line)
+          read(line, *) normVec(1:3, ii), slipVec(1:3, ii), systemSet(ii)
+        end do
+      else
+        write(*, *) "Unknow crystal type: ", crysType
+        stop
       end if
 
       nSlipSystems = nSlipSys
@@ -85,7 +95,7 @@
       do ii = 1, nOrder + 1
         call ReadLine(fID, line)
         read(line, *, iostat=istat) c11, c12, c44, c13, c33, c66
-        if (istat == 0) then
+        if (istat /= 0) then
           c13 = 0.0d0
           c33 = 0.0d0
           c66 = 0.0d0
@@ -118,6 +128,7 @@
       real(kind = RKIND) :: c11, c12, c44, c33, c13, c66
 
 
+
       c11 = Polynomial(elasProps(:, 1), temp)   
       c12 = Polynomial(elasProps(:, 2), temp)   
       c44 = Polynomial(elasProps(:, 3), temp)   
@@ -134,14 +145,14 @@
       fStifLoc(2, 2, 1, 1) = c12
     
       fStifLoc(1, 3, 1, 3) = c44
-      fStifLoc(3, 1, 3, 1) = c44
       fStifLoc(1, 3, 3, 1) = c44
       fStifLoc(3, 1, 1, 3) = c44
+      fStifLoc(3, 1, 3, 1) = c44
      
       fStifLoc(2, 3, 2, 3) = c44
-      fStifLoc(3, 2, 3, 2) = c44
       fStifLoc(2, 3, 3, 2) = c44
       fStifLoc(3, 2, 2, 3) = c44
+      fStifLoc(3, 2, 3, 2) = c44
 
       if (abs(c33) < SMALL) then
         fStifLoc(3, 3, 3, 3) = c11
@@ -239,6 +250,7 @@
 
       tauRatioSign = sign(1.0d0, tauRatio)
       absTauRatio  = abs(tauRatio)
+      write(*, *) "fXm = ", mm, "gammaDot0 = ", gammaDot0
       do i = 1, nSlipSys
         fGammaDot(i) = factor*gammaDot0*tauRatioSign(i)*absTauRatio(i)**mmInv
       end do

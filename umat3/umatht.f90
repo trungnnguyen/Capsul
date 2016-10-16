@@ -1,38 +1,3 @@
-!> main entry of the umat called by abaqus 
-  subroutine umat(STRESS, STATEV, DDSDDE, SSE, SPD, SCD,                            &  
-                  RPL, DDSDDT, DRPLDE, DRPLDT,                                      &
-                  STRAN, DSTRAN, TIME, DTIME, TEMP, DTEMP, PREDEF, DPRED, CMNAME,   &
-                  NDI, NSHR, NTENS, NSTATV, PROPS, NPROPS, COORDS, DROT, PNEWDT,    &
-                  CELENT, DFGRD0, DFGRD1, NOEL, NPT, LAYER, KSPT, KSTEP, KINC)
-
-    use utils, only : RKIND, IKIND
-    implicit none
-
-    ! Explicit Declaration of arguments called by ABAQUS
-    include 'umatArgs.inc'
-
-    if (CMNAME(1:8) == "UMAT_CP1") then
-      call umat_cp2(STRESS, STATEV, DDSDDE, SSE, SPD, SCD,                            &  
-                    RPL, DDSDDT, DRPLDE, DRPLDT,                                      &
-                    STRAN, DSTRAN, TIME, DTIME, TEMP, DTEMP, PREDEF, DPRED, CMNAME,   &
-                    NDI, NSHR, NTENS, NSTATV, PROPS, NPROPS, COORDS, DROT, PNEWDT,    &
-                    CELENT, DFGRD0, DFGRD1, NOEL, NPT, LAYER, KSPT, KSTEP, KINC)
-
-    else
-      write(*, *) "Unknown Material Type: ", CMNAME
-    end if
-
-!    drpldt = 1.0d1
-!    drplde = 2.0d2
-!    ddsddt = 3.0d3
-
-    if (npt == 1 .and. NOEL == 1) then
-      write(*, *) "Incr = ", Kinc, " temp = ", temp, " dtemp = ", dtemp
-    end if
-
-  end subroutine umat
-
-
 
   subroutine umatht(u, dudt, dudg, flux, dfdt, dfdg,                           &
                     statev, temp, dtemp, dtemdx, time, dtime, predef, dpred,   &
@@ -80,9 +45,7 @@
     integer(kind = IKIND) :: i
 
 
-    if (npt == 1) then
-!      write(*, *) "In umatht incr = ", Kinc, " temp = ", temp, " dtemp = ", dtemp
-    end if
+    write(*, *) "umatht is called"
 
     cond   = props(1)
     specht = props(2)
@@ -99,4 +62,5 @@
 
 
   end subroutine
+
 

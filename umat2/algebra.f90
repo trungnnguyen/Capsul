@@ -249,10 +249,10 @@
 
 
     !> Determinant of the given matrix 
-    function determinant(mat)
+    function matDet(mat)
 
       real(kind = RKIND), intent(in) :: mat(:, :) 
-      real(kind = RKIND) :: determinant
+      real(kind = RKIND) :: matDet
 
       real(kind = RKIND), allocatable :: ma(:, :)
       integer(kind = IKIND) :: row, col
@@ -263,31 +263,24 @@
       col = size(mat, 2)
 
       if (row /= col) then
-          write(*, *) "Error::determinant: invalid mat size"
-          stop
+        write(*, *) "Error::matDet: invalid mat size"
+        stop
       end if
 
       if (row == 3) then
-        determinant = mat(1, 1)*(mat(2, 2)*mat(3, 3) - mat(2, 3)*mat(3, 2))  &
-                    - mat(1, 2)*(mat(2, 1)*mat(3, 3) - mat(2, 3)*mat(3, 1))  &
-                    + mat(1, 3)*(mat(2, 1)*mat(3, 2) - mat(2, 2)*mat(3, 1))
+        matDet = mat(1, 1)*(mat(2, 2)*mat(3, 3) - mat(2, 3)*mat(3, 2))  &
+               - mat(1, 2)*(mat(2, 1)*mat(3, 3) - mat(2, 3)*mat(3, 1))  &
+               + mat(1, 3)*(mat(2, 1)*mat(3, 2) - mat(2, 2)*mat(3, 1))
       else if (row == 2) then
-        determinant = mat(1, 1)*mat(2, 2) - mat(1, 2)*mat(2, 1)
+        matDet = mat(1, 1)*mat(2, 2) - mat(1, 2)*mat(2, 1)
       else if (row == 1) then
-        determinant = mat(1, 1) 
+        matDet = mat(1, 1) 
       else
-        allocate(ma(row, col))
-        ma = mat
-        call upper(ma)
-        determinant = 1.0d0
-        do i = 1, row
-          determinant = determinant * ma(i, i)
-        end do
-
-        if (allocated(ma)) deallocate(ma)
+        write(*, *) "Error::matDet: invalid mat size"
+        stop
       end if
 
-    end function determinant
+    end function matDet
 
 
     !> 
@@ -305,7 +298,7 @@
       tr2  = mat2(1, 1) + mat2(2, 2) + mat2(3, 3)
       matInvars(2) = 0.5d0*(matInvars(1)*matInvars(1) - tr2)
 
-      matInvars(3) = determinant(mat)
+      matInvars(3) = matDet(mat)
 
     end function matInvars
 
@@ -317,7 +310,7 @@
       real(kind = RKIND) :: matInv(3, 3)
 
       integer(kind = IKIND) :: row1, col1, row2, col2
-      real(kind = RKIND) :: aux(25), det
+      real(kind = RKIND)    :: aux(25), det
       integer(kind = IKIND) :: i
 
       aux(1)  =  mat(1, 1)
@@ -387,32 +380,32 @@
     end function matInv
 
 
-    subroutine polarDcmp(FF, UU, RR)
+    subroutine polarDcmp(FF, RR, UU)
       use utils, only : UNITMAT, PI
       
       real(kind = RKIND), intent(in)  :: FF(3, 3)
-      real(kind = RKIND), intent(out) :: UU(3, 3)
       real(kind = RKIND), intent(out) :: RR(3, 3)
+      real(kind = RKIND), intent(out) :: UU(3, 3)
 
       real(kind = RKIND) :: UUInv(3, 3)
       real(kind = RKIND) :: CC(3, 3), CC2(3, 3)
       real(kind = RKIND) :: iu1, iu2, iu3
       real(kind = RKIND) :: x(3), invars(3), lambda(3)
-      real(kind = RKIND) :: b, c, m, n, t, D, tmp1
+      real(kind = RKIND) :: b, c, m, n, t, D, tmp1, norm
 
       integer(kind = IKIND) :: ii
  
-
       CC = matmul(transpose(FF), FF)
 
       invars = matInvars(CC)
 
       tmp1 = invars(1)*invars(1)
       b = invars(2) - tmp1/3.0d0
-      c = -2.0d0/27.0d0*tmp1*invars(1) + invars(1)*invars(2)/3.0d0 - invars(3)
+      c = (-2.0d0/27.0d0)*tmp1*invars(1) + invars(1)*invars(2)/3.0d0 - invars(3)
 
       if(dabs(b) < 1.0d-15) then
-        x = -c**(1.0d0/3.0d0)
+        ! caution.
+        x = -abs(c)**(1.0d0/3.0d0)
       else
         m  = 2.0d0*dsqrt(dabs(-b)/3.0d0)
         n  = 3.0d0*c/(m*b)
@@ -439,6 +432,12 @@
       UUInv = (CC - iu1*UU + iu2*UNITMAT)/iu3
       
       RR = matmul(FF, UUInv)
+
+      norm = matNorm(FF - matmul(RR, UU))
+      if (norm >= 1.0e-10) then
+        write(*, *) "Error in polar decompostion"
+        stop
+      end if
 
     end subroutine polarDcmp
 

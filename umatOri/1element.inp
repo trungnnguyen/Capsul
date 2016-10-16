@@ -1,0 +1,63 @@
+*Heading
+1 element
+*node
+1, 0., 0., 0.
+2, 1., 0., 0.
+3, 1., 1., 0.
+4, 0., 1., 0.
+5, 0., 0., 1.
+6, 1., 0., 1.
+7, 1., 1., 1.
+8, 0., 1., 1.
+*NODE,nset=master
+999999,0,0,2.
+*element,TYPE=C3D8,ELSET=cristal
+1,1,2,3,4,5,6,7,8
+**
+*SOLID SECTION,ELSET=cristal, MATERIAL=U1
+1.
+**
+** EQUATIONS
+**
+*Equation
+2
+3,2,1.,999999,2,-1.
+2
+4,2,1.,999999,2,-1.
+2
+7,2,1.,999999,2,-1.
+2
+8,2,1.,999999,2,-1.
+*BOUNDARY
+1,1,3,0.
+2,2,3,0.
+5,2,,0.
+6,2,,0.
+**
+** MATERIALS
+** single crystal with 111 oriented in Y axis
+**
+*MATERIAL,NAME=U1
+*USER MATERIAL,TYPE=mechanical,constants=7
+-0.8039112691,   -0.5736617126,   -0.1569678659,    0.5947492497,   -0.7753910987,   -0.2122309452,    0.0000000000
+*DEPVAR
+100
+*STEP, name=Step-1, nlgeom=yes, inc=500,UNSYMM=yes
+*Static
+.00001,1.,.0001,.1
+*Boundary
+999999,2,,1.
+*Restart, write, overlay
+**
+** FIELD OUTPUT: F-Output-1
+**
+*Output, field, variable=PRESELECT
+*Element output, elset=cristal
+SDV
+*Node print,nset=master
+U
+RF
+*END STEP
+
+
+

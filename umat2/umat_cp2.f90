@@ -5,7 +5,7 @@
                       NDI, NSHR, NTENS, NSTATV, PROPS, NPROPS, COORDS, DROT, PNEWDT,    &
                       CELENT, DFGRD0, DFGRD1, NOEL, NPT, LAYER, KSPT, KSTEP, KINC)
 
-    use utils,     only : IKIND, RKIND, UPDSIG, UPDJAC
+    use utils,     only : IKIND, RKIND, UPDSIG, UPDJac
     use algebra,   only : matInv
     use init,      only : initialized, Initialization
     use expansion, only : fDfGrdTh
@@ -43,14 +43,16 @@
     dfGrdMe0 = matmul(dfGrd0, matInv(dfGrdTh0))
     dfGrdMe1 = matmul(dfGrd1, matInv(dfGrdTh1))
 
+
     call UpdStress(dfGrdMe0, dfGrdMe1, statev0, statev, nstatv, phase, temp1, dtime,        &
                    stress, ntens, rpl, pNewDt)
                
+
     if (pNewDt < 1.0d0) return
 
 
     ! Update the jacob matrix -- ddsdde
-    phase = UPDJAC
+    phase = UPDJac
     call UpdJacob(dfGrdMe0, dfGrdMe1, statev0, statev, nstatv, phase, temp1, dtime,        & 
                   stress, ntens, ddsdde, pNewDt)
 
@@ -61,7 +63,7 @@
 
   subroutine UpdStress(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp, dtime,    &
                        stress, ntens, rpl, pNewDt)
-    use utils, only : IKIND,  RKIND, UPDSIG, UPDJAC
+    use utils, only : IKIND,  RKIND, UPDSIG, UPDJac
     use init,  only : nSlipSys
 
     implicit none
@@ -97,7 +99,7 @@
 
 
   subroutine InitIterVec(dfGrd0, dfGrd1, statev0, statev1, nstatv, phase, temp, dtime, iterVec, workArray)
-    use utils,     only : IKIND,  RKIND, UNITMAT, UPDSIG, UPDJAC
+    use utils,     only : IKIND,  RKIND, UNITMAT, UPDSIG, UPDJac
     use algebra,   only : matInv, ten4Rot, polarDcmp
     use init,      only : nSlipSys, oriMatx, schmidt
     use crystal,   only : fStifLoc
@@ -147,8 +149,8 @@
     call loadStatev(statev0, nstatv, dfGrdEls0, dGamma0, gamma0, tauCrit0, Lp0)
     dfGrdElsPrd    = matmul(dfGrdInc, dfGrdEls0)
     dfGrdElsPrdInv = matInv(dfGrdElsPrd)
-
-    call polarDcmp(dfGrdInc, UU, RR)  
+    
+    call polarDcmp(dfGrdInc, RR, UU)  
     dfGrdElsPrdLarDef = matmul(RR, dfGrdEls0)
     stiffLoc   = fStifLoc(temp)
     stiffGlb   = ten4Rot(stiffLoc, transpose(oriMatx))
@@ -158,7 +160,7 @@
       dGamma   = 0.0d0
       gamma    = gamma0
       tauCrit  = tauCrit0
-    else if (phase == UPDJAC) then 
+    else if (phase == UPDJac) then 
       call loadStatev(statev1, nstatv, dfGrdEls1, dGamma1, gamma1, tauCrit1, Lp1)
       dfGrdEls = dfGrdEls1
       dGamma   = dGamma1
@@ -184,9 +186,9 @@
 
 
   subroutine NRSolve(iterVec, workArray,  phase, temp, dtime, pNewDt)
-    use utils,     only : RKIND, IKIND, LKIND, UPDSIG, UPDJAC
-    use algebra,   only : vecNorm, GaussJordan
-    use init,      only : nSlipSys, maxIters, toler, maxItersJac, tolerJac
+    use utils,   only : RKIND, IKIND, LKIND, UPDSIG, UPDJac
+    use algebra, only : vecNorm, GaussJordan
+    use init,    only : nSlipSys, maxIters, toler, maxItersJac, tolerJac
 
     implicit none
 
@@ -216,7 +218,7 @@
     if (phase == UPDSIG) then
       nIters  = maxIters
       iterTol = toler
-    else if (phase == UPDJAC) then
+    else if (phase == UPDJac) then
       nIters  = maxItersJac
       iterTol = tolerJac
     end if
@@ -234,8 +236,8 @@
         iter = 0
         processed = .true.
       else
-        call CalJAC(iterVec, workArray, temp, dtime, bigJAC)
-        call GaussJordan(bigJAC, bigRes, iterVecInc, iflag)
+        call CalJac(iterVec, workArray, temp, dtime, bigJac)
+        call GaussJordan(bigJac, bigRes, iterVecInc, iflag)
         if (iflag == 1) then
           pNewDt = 0.5d0
           return
@@ -357,11 +359,12 @@
     workArray(101+nSlipSys*4: 100+nSlipSys*5) = tauRatio
     workArray(101+nSlipSys*5: 100+nSlipSys*6) = gammaDot
 
+    
   end subroutine CalRes
 
 
 
-  subroutine CalJAC(iterVec, workArray, temp, dtime, bigJac)
+  subroutine CalJac(iterVec, workArray, temp, dtime, bigJac)
     use utils,       only : RKIND, IKIND
     use algebra,     only : tenmul, tenCtrct44, ten3333ToA99, matNorm
     use init,        only : nSlipSys, schmidt
@@ -440,7 +443,7 @@
     end do
   
 !    jacobNR = MJacob - aux3333_2
-    bigJAC(1:9, 1:9) = Ten3333ToA99(MJacob - aux3333_2)
+    bigJac(1:9, 1:9) = Ten3333ToA99(MJacob - aux3333_2)
 
     !BOX12: Partial Lp/ partial dgamma
     dTauCritDGamma = fDTauCritDotDGammaDot(gamma, gammaDot, tauCrit, temp)
@@ -472,13 +475,13 @@
       bigJac(9+i, 9+i) = bigJac(9+i, 9+i) + 1.0d0
     end do
 
-  end subroutine CalJAC
+  end subroutine CalJac
 
 
 
   ! NUMERICAL PROBLEMS WITH LARGE CORRECTIONS-->PLASTIC PREDICTOR
   subroutine CorOnLargeDef(iterVec, workArray,  phase, temp, dtime, pNewDt)
-    use utils,       only : RKIND, IKIND, UPDSIG, UPDJAC
+    use utils,       only : RKIND, IKIND, UPDSIG, UPDJac
     use algebra,     only : polarDcmp, ten4Rot
     use init,        only : nSlipSys, oriMatx, schmidt
     use deformation, only : fGreenStrain, fElasStress
@@ -537,7 +540,7 @@
       tauCritDot = fTauCritDot(gamma, gammaDot, tauCrit, temp)
       tauCrit    = tauCrit0 + tauCritDot*dtime
 
-    else if (phase == UPDJAC) then
+    else if (phase == UPDJac) then
       dGamma  = 0.0d0
       gamma   = gamma0
       tauCrit = tauCrit0
@@ -555,7 +558,7 @@
 !
 ! ROTATE STRESSES TO DEFORMED CONFIGURATION  
   subroutine PostConverge(iterVec, workArray, phase, temp, dtime, stress, ntens, statev, nstatv, rpl)
-    use utils,       only : RKIND, IKIND, UPDSIG, UPDJAC, UNITMAT
+    use utils,       only : RKIND, IKIND, UPDSIG, UPDJac, UNITMAT
     use algebra,     only : polarDcmp, matRot, ten4Rot
     use init,        only : nSlipSys, oriMatx, schmidt
     use crystal,     only : fStifLoc, fTauResl
@@ -597,7 +600,7 @@
 
     dfGrdElsNew = reshape(iterVec(1:9), (/3, 3/))
 
-    call polarDcmp(dfGrdElsNew, UU, RR)
+    call polarDcmp(dfGrdElsNew, RR, UU)
     elasStrain = fGreenStrain(dfGrdElsNew)
     stiffGlb   = reshape(workArray(1:81), (/3, 3, 3, 3/))
     sKirchRot  = fElasStress(stiffGlb, elasStrain)
@@ -635,7 +638,7 @@
 
   subroutine UpdJacob(dfGrd0, dfGrd1, statev0, statev1, nstatv, phase, temp, dtime, &
                       stress, ntens, ddsdde, pNewDt)
-    use utils,     only : RKIND, IKIND, UNITMAT, UPDJAC
+    use utils,     only : RKIND, IKIND, UNITMAT, UPDJac
     use init,      only : epsInc, oriMatx
     use crystal,   only : fStifLoc
     use algebra,   only : ten4Rot, ten3333ToA66
@@ -672,7 +675,7 @@
 !   General loop on the 6 perturbations to obtain Jacobian
 !   On each istep a whole NR problem is solved to get the corresponding stress
     halfEpsInc = 0.5d0*epsInc
-    dltEpsJAC = reshape((/    epsInc, halfEpsInc, halfEpsInc,             &
+    dltEpsJac = reshape((/    epsInc, halfEpsInc, halfEpsInc,             &
                           halfEpsInc,     epsInc, halfEpsInc,             &
                           halfEpsInc, halfEpsInc,     epsInc/), (/3, 3/))
 

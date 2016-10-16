@@ -12,7 +12,7 @@
     include 'umatArgs.inc'
 
     if (CMNAME(1:8) == "UMAT_CP1") then
-      call umat_cp2(STRESS, STATEV, DDSDDE, SSE, SPD, SCD,                            &  
+      call umat_cp3(STRESS, STATEV, DDSDDE, SSE, SPD, SCD,                            &  
                     RPL, DDSDDT, DRPLDE, DRPLDT,                                      &
                     STRAN, DSTRAN, TIME, DTIME, TEMP, DTEMP, PREDEF, DPRED, CMNAME,   &
                     NDI, NSHR, NTENS, NSTATV, PROPS, NPROPS, COORDS, DROT, PNEWDT,    &
@@ -20,14 +20,6 @@
 
     else
       write(*, *) "Unknown Material Type: ", CMNAME
-    end if
-
-!    drpldt = 1.0d1
-!    drplde = 2.0d2
-!    ddsddt = 3.0d3
-
-    if (npt == 1 .and. NOEL == 1) then
-      write(*, *) "Incr = ", Kinc, " temp = ", temp, " dtemp = ", dtemp
     end if
 
   end subroutine umat

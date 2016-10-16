@@ -1,53 +1,43 @@
 !> @brief  This file contains the subroutines for umat_cp2
-  subroutine umat_cp1(STRESS, STATEV, DDSDDE, SSE, SPD, SCD,                            &  
+  subroutine umat_cp3(STRESS, STATEV, DDSDDE, SSE, SPD, SCD,                            &  
                       RPL, DDSDDT, DRPLDE, DRPLDT,                                      &
                       STRAN, DSTRAN, TIME, DTIME, TEMP, DTEMP, PREDEF, DPRED, CMNAME,   &
                       NDI, NSHR, NTENS, NSTATV, PROPS, NPROPS, COORDS, DROT, PNEWDT,    &
                       CELENT, DFGRD0, DFGRD1, NOEL, NPT, LAYER, KSPT, KSTEP, KINC)
 
-    use utils,     only : IKIND, RKIND, UPDSIG, UPDJAC
-    use init,      only : initialized, Initialization
+    use utils,     only : IKIND, RKIND
+    use init,      only : initialized
     implicit none
 
     !> Explicit Declaration of interface arguments called by ABAQUS
     include 'umatArgs.inc'
 
-    ! local variables
-    real(kind = RKIND)    :: statev0(nstatv)
-    integer(kind = IKIND) :: phase
 
 
     ! Global Initialization. Executed only once.
     if (.not. initialized) then
-      call Initialization(props)
+      theCrysPlasMat = CrysPlasMat(fID)
+      pMat => theCrysPropMat
       initialized = .true.
     endif
-    if (time(2) == 0.0d0)  call InitStatev(statev, nstatv)
 
+    oriArray = props(1:6)
+    if (time(2) == 0.0d0)  call pMat%InitStatev(oriArray, statev, nstatv)
 
-    ! Update the Cauchy stress tensor
-    phase = UPDSIG
-    statev0 = statev
-    call UpdStress(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp, dtime,        &
-                   stress, ntens, rpl, pNewDt)
-               
-    if (pNewDt < 1.0d0) return
+    call pMat%LoadStatev(statev, nstatv)
+    call pMat%AdvanceStep(dfGrd0, dfGrd1, temp, temp+dtemp, dtime, pNewDt)
 
+    stress = pMat%GetCauchyStress()
+    ddsdde = pMat%GetModuli()
+    call pMat%SaveStatev(statev, nstatv)
 
-    ! Update the jacob matrix -- ddsdde
-    phase = UPDJAC
-    call UpdJacob (dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp, dtime,        & 
-                   stress, ntens, ddsdde, pNewDt)
-
-
-  end subroutine umat_cp1
-
+  end subroutine umat_cp3
 
 
 
   subroutine UpdStress(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp, dtime,    &
-                       stress, ntens, rpl, pNewDt)
-    use utils, only : IKIND,  RKIND, UPDSIG, UPDJAC
+                       stress, ntens, rpl, pNewDt, npt, kinc)
+    use utils, only : IKIND,  RKIND, UPDSIG, UPDJac
     use init,  only : nSlipSys
 
     implicit none
@@ -64,27 +54,28 @@
     real(kind = RKIND),    intent(out) :: stress(ntens)
     real(kind = RKIND),    intent(out) :: rpl
     real(kind = RKIND),    intent(out) :: pNewDt
-
  
-    real(kind = RKIND) :: iterVec(nSlipSys+9)
-    real(kind = RKIND) :: workArray(nSlipSys*8+100)
+    integer(kind = IKIND), intent(in)  :: npt, kinc
+
+    real(kind = RKIND) :: iterX(nSlipSys+9)
+    real(kind = RKIND) :: workArray(nSlipSys*6+100)
 
 
-    call InitIterVec(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp, dtime, iterVec, workArray)
+    call InitIterX(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp, dtime, iterX, workArray)
 
-    call NRSolve(iterVec, workArray, phase, temp, dtime, pNewDt)
+    call NRSolve(iterX, workArray, phase, temp, dtime, pNewDt)
 
     if (pNewDt < 1.0d0) return
 
-    call PostConverge(iterVec, workArray, phase, temp, dtime, stress, ntens, statev, nstatv, rpl)
+    call PostConverge(iterX, workArray, phase, temp, dtime, stress, ntens, statev, nstatv, rpl, npt, kinc)
    
 
   end subroutine UpdStress
 
 
 
-  subroutine InitIterVec(dfGrd0, dfGrd1, statev0, statev1, nstatv, phase, temp, dtime, iterVec, workArray)
-    use utils,     only : IKIND,  RKIND, UNITMAT, UPDSIG, UPDJAC
+  subroutine InitIterX(dfGrd0, dfGrd1, statev0, statev1, nstatv, phase, temp, dtime, iterX, workArray)
+    use utils,     only : IKIND,  RKIND, UNITMAT, UPDSIG, UPDJac
     use algebra,   only : matInv, ten4Rot, polarDcmp
     use init,      only : nSlipSys, oriMatx, schmidt
     use crystal,   only : fStifLoc
@@ -99,8 +90,8 @@
     integer(kind = IKIND), intent(in)  :: phase
     real(kind = RKIND),    intent(in)  :: temp
     real(kind = RKIND),    intent(in)  :: dtime
-    real(kind = RKIND),    intent(out) :: iterVec(nSlipSys+9)
-    real(kind = RKIND),    intent(out) :: workArray(nSlipSys*8+100)
+    real(kind = RKIND),    intent(out) :: iterX(nSlipSys+9)
+    real(kind = RKIND),    intent(out) :: workArray(nSlipSys*6+100)
 
 
     real(kind = RKIND) :: dfGrdEls0(3, 3)
@@ -134,7 +125,7 @@
     call loadStatev(statev0, nstatv, dfGrdEls0, dGamma0, gamma0, tauCrit0, Lp0)
     dfGrdElsPrd    = matmul(dfGrdInc, dfGrdEls0)
     dfGrdElsPrdInv = matInv(dfGrdElsPrd)
-
+    
     call polarDcmp(dfGrdInc, RR, UU)  
     dfGrdElsPrdLarDef = matmul(RR, dfGrdEls0)
     stiffLoc   = fStifLoc(temp)
@@ -145,7 +136,7 @@
       dGamma   = 0.0d0
       gamma    = gamma0
       tauCrit  = tauCrit0
-    else if (phase == UPDJAC) then 
+    else if (phase == UPDJac) then 
       call loadStatev(statev1, nstatv, dfGrdEls1, dGamma1, gamma1, tauCrit1, Lp1)
       dfGrdEls = dfGrdEls1
       dGamma   = dGamma1
@@ -153,8 +144,8 @@
       tauCrit  = tauCrit1 
     end if
 
-    iterVec(1:  9) = reshape(dfGrdEls, (/9/))
-    iterVec(10: 9+nSlipSys) = dGamma
+    iterX(1:  9) = reshape(dfGrdEls, (/9/))
+    iterX(10: 9+nSlipSys) = dGamma
 
     ! Auxliary constants and variables are stored in workArray for later use
     workArray(1:  81) = reshape(stiffGlb, (/81/))
@@ -166,20 +157,19 @@
     workArray(101+nSlipSys*2: 100+nSlipSys*3) = gamma
     workArray(101+nSlipSys*3: 100+nSlipSys*4) = tauCrit
 
-
-  end subroutine InitIterVec
-
+  end subroutine InitIterX
 
 
-  subroutine NRSolve(iterVec, workArray,  phase, temp, dtime, pNewDt)
-    use utils,     only : RKIND, IKIND, LKIND, UPDSIG, UPDJAC
-    use algebra,   only : vecNorm, GaussJordan
-    use init,      only : nSlipSys, maxIters, toler, maxItersJac, tolerJac
+
+  subroutine NRSolve(iterX, workArray,  phase, temp, dtime, pNewDt)
+    use utils,   only : RKIND, IKIND, LKIND, UPDSIG, UPDJac
+    use algebra, only : vecNorm, GaussJordan
+    use init,    only : nSlipSys, maxIters, toler, maxItersJac, tolerJac
 
     implicit none
 
-    real(kind = RKIND),    intent(inout) :: iterVec(nSlipSys+9)
-    real(kind = RKIND),    intent(inout) :: workArray(nSlipSys*8+100)
+    real(kind = RKIND),    intent(inout) :: iterX(nSlipSys+9)
+    real(kind = RKIND),    intent(inout) :: workArray(nSlipSys*6+100)
     integer(kind = IKIND), intent(in)    :: phase
     real(kind = RKIND),    intent(in)    :: temp
     real(kind = RKIND),    intent(in)    :: dtime
@@ -188,11 +178,11 @@
     ! local variables
     real(kind = RKIND), parameter :: BIGNORM = 1.0d10
 
-    real(kind = RKIND) :: bigRes(nSlipSys+9)
-    real(kind = RKIND) :: bigJac(nSlipSys+9, nSlipSys+9)
-    real(kind = RKIND) :: iterVecInc(nSlipSys+9)
-    real(kind = RKIND) :: normRes
-    real(kind = RKIND) :: normIterVecInc
+    real(kind = RKIND) :: iterRes(nSlipSys+9)
+    real(kind = RKIND) :: iterLHS(nSlipSys+9, nSlipSys+9)
+    real(kind = RKIND) :: iterXInc(nSlipSys+9)
+    real(kind = RKIND) :: normRHS
+    real(kind = RKIND) :: normXInc
     real(kind = RKIND) :: iterTol
     integer(kind = IKIND) :: nIters
     integer(kind = IKIND) :: iter
@@ -212,28 +202,27 @@
     iter = 1
     processed = .false.
     do while (iter <= nIters)
-      call CalRes(iterVec, temp, dtime, bigRes, workArray, pNewDt)
+      call FormIterRes(iterX, temp, dtime, iterRes, workArray, pNewDt)
       if (pNewDt < 1.0d0) return
-      normRes = vecNorm(bigRes)
-      if (normRes <= iterTol) exit
+      normRHS = vecNorm(iterRes)
+      if (normRHS <= iterTol) exit
 
-      if (normRes > BIGNORM .and. .not. processed) then
-        call CorOnLargeDef(iterVec, workArray, phase, temp, dtime, pNewDt)
+      if (normRHS > BIGNORM .and. .not. processed) then
+        call CorOnLargeDef(iterX, workArray, phase, temp, dtime, pNewDt)
         iter = 0
         processed = .true.
       else
-        call CalJAC(iterVec, workArray, temp, dtime, bigJAC)
-        call GaussJordan(bigJAC, bigRes, iterVecInc, iflag)
-        !call gauss(bigJAC, bigRes, iterVecInc, nSlipSys+9, nSlipSys+9, iflag)
+        call FormIterLHS(iterX, workArray, temp, dtime, iterLHS)
+        call GaussJordan(iterLHS, iterRes, iterXInc, iflag)
         if (iflag == 1) then
           pNewDt = 0.5d0
           return
         end if
         
-        call UpdIterVec(iterVec, iterVecInc, workArray, temp)
+        call UpdIterVec(iterX, iterXInc, workArray, temp)
 
-        normIterVecInc = vecNorm(iterVecInc)
-        if (normIterVecInc > BIGNORM)  call CorOnLargeDef(iterVec, workArray, phase, temp, dtime, pNewDt)
+        normXInc = vecNorm(iterXInc)
+        if (normXInc > BIGNORM)  call CorOnLargeDef(iterX, workArray, phase, temp, dtime, pNewDt)
 
       end if
 
@@ -250,48 +239,45 @@
 
 
 
-  subroutine UpdIterVec(iterVec, iterVecInc, workArray, temp) 
+  subroutine UpdIterVec(iterX, iterXInc, workArray, temp) 
     use utils,     only : RKIND
     use hardening, only : fTauCritDot
     use init,      only : nSlipSys
 
     implicit none
 
-    real(kind = RKIND), intent(inout) :: iterVec(nSlipSys+9)
-    real(kind = RKIND), intent(in)    :: iterVecInc(nSlipSys+9)
-    real(kind = RKIND), intent(inout) :: workArray(nSlipSys*8+100)
+    real(kind = RKIND), intent(inout) :: iterX(nSlipSys+9)
+    real(kind = RKIND), intent(in)    :: iterXInc(nSlipSys+9)
+    real(kind = RKIND), intent(inout) :: workArray(nSlipSys*6+100)
     real(kind = RKIND), intent(in)    :: temp
 
     real(kind = RKIND) :: gamma0(nSlipSys)
     real(kind = RKIND) :: tauCrit0(nSlipSys)
 
     real(kind = RKIND) :: dGamma(nSlipSys)
-    real(kind = RKIND) :: absDGamma(nSlipSys)
     real(kind = RKIND) :: gamma(nSlipSys)
     real(kind = RKIND) :: tauCrit(nSlipSys)
     real(kind = RKIND) :: tauCritInc(nSlipSys)
    
 
+    iterX = iterX - iterXInc
 
-    iterVec = iterVec - iterVecInc
-
-    dGamma    = iterVec(10: 9+nSlipSys)
-    absDGamma = dabs(dGamma)
+    dGamma    = iterX(10: 9+nSlipSys)
 
     gamma0    = workArray(101: 100+nSlipSys)
-    gamma     = gamma0 + absDGamma
+    gamma     = gamma0 + dabs(dGamma)
     workArray(101+nSlipSys*2: 100+nSlipSys*3) = gamma
 
     tauCrit    = workArray(101+nSlipSys*3: 100+nSlipSys*4)
-    tauCritInc = fTauCritDot(gamma, absDGamma, tauCrit, temp)
+    tauCritInc = fTauCritDot(gamma, dGamma, tauCrit, temp)
     tauCrit0   = workArray(101+nSlipSys: 100+nSlipSys*2)
     workArray(101+nSlipSys*3 : 100+nSlipSys*4) = tauCrit0 + tauCritInc
 
   end subroutine UpdIterVec
 
 
-  ! Calculate the residual (right hand section (RHS) of the equation) in each N-R iteration  
-  subroutine CalRes(iterVec, temp, dtime, bigRes, workArray, pNewDt)
+  ! Calculate the residual (right hand section (Res) of the equation) in each N-R iteration  
+  subroutine FormIterRes(iterX, temp, dtime, iterRes, workArray, pNewDt)
     use utils,       only : RKIND, IKIND, UNITMAT
     use algebra,     only : ten4Rot
     use init,        only : nSlipSys, schmidt, oriMatx
@@ -299,11 +285,11 @@
     use deformation, only : fGreenStrain, fElasStress
 
     implicit none
-    real(kind = RKIND), intent(in)  :: iterVec(nSlipSys+9)
+    real(kind = RKIND), intent(in)  :: iterX(nSlipSys+9)
     real(kind = RKIND), intent(in)  :: temp
     real(kind = RKIND), intent(in)  :: dtime
-    real(kind = RKIND), intent(out) :: bigRes(nSlipSys+9)
-    real(kind = RKIND), intent(out) :: workArray(nSlipSys*8+100)
+    real(kind = RKIND), intent(out) :: iterRes(nSlipSys+9)
+    real(kind = RKIND), intent(out) :: workArray(nSlipSys*6+100)
     real(kind = RKIND), intent(out) :: pNewDt
 
     real(kind = RKIND) :: stiffGlb(3, 3, 3, 3)
@@ -319,12 +305,11 @@
     real(kind = RKIND) :: sKirchRot(3, 3)
     real(kind = RKIND) :: tauResl(nSlipSys)
     real(kind = RKIND) :: tauRatio(nSlipSys)
-    real(kind = RKIND) :: tauSign(nSlipSys)
     real(kind = RKIND) :: gammaDot(nSlipSys)
 
   
-    dfGrdEls        = reshape(iterVec(1:9), (/3, 3/))
-    dGamma          = iterVec(10: 9+nSlipSys)
+    dfGrdEls        = reshape(iterX(1:9), (/3, 3/))
+    dGamma          = iterX(10: 9+nSlipSys)
     dfGrdElsPrdInv  = reshape(workArray(82:90), (/3, 3/))
     tauCrit         = workArray(101+nSlipSys*3: 100+nSlipSys*4)
 
@@ -332,45 +317,43 @@
     stiffGlb    = reshape(workArray(1:81), (/3, 3, 3, 3/))
     sKirchRot   = fElasStress(stiffGlb, elasStrain)
     tauResl     = fTauResl(sKirchRot, schmidt(:, :, 1:nSlipSys))
-    tauRatio    = dabs(tauResl/tauCrit)
+    tauRatio    = tauResl/dabs(tauCrit)
     if (fStressDiverged(tauRatio)) then
       write(*, *) "Diverged resolve stress detected!"
       pNewDt = min(pNewDt, 0.75d0)
       return
     end if
 
-    tauSign   = sign(1.0d0, tauResl)
-    gammaDot  = fGammaDot(tauRatio, tauSign, temp)
+    gammaDot  = fGammaDot(tauRatio, temp)
 
     LpNew = fLp(gammaDot, schmidt(:, :, 1:nSlipSys))
     LpPrd = (UNITMAT - matmul(dfGrdElsPrdInv, dfGrdEls))/dtime
 
-    bigRes(1 : 9)          = reshape(LpPrd - LpNew, (/9/))
-    bigRes(10: 9+nSlipSys) = dGamma - gammaDot*dtime
+    iterRes(1 : 9)          = reshape(LpPrd - LpNew, (/9/))
+    iterRes(10: 9+nSlipSys) = dGamma - gammaDot*dtime
    
-    workArray(101+nSlipSys*4: 100+nSlipSys*5) = tauResl 
-    workArray(101+nSlipSys*5: 100+nSlipSys*6) = tauRatio
-    workArray(101+nSlipSys*6: 100+nSlipSys*7) = tauSign
-    workArray(101+nSlipSys*7: 100+nSlipSys*8) = gammaDot
+    workArray(101+nSlipSys*4: 100+nSlipSys*5) = tauRatio
+    workArray(101+nSlipSys*5: 100+nSlipSys*6) = gammaDot
 
-  end subroutine CalRes
-
+    
+  end subroutine FormIterRes
 
 
-  subroutine CalJAC(iterVec, workArray, temp, dtime, bigJac)
+
+  subroutine FormIterLHS(iterX, workArray, temp, dtime, iterLHS)
     use utils,       only : RKIND, IKIND
     use algebra,     only : tenmul, tenCtrct44, ten3333ToA99, matNorm
     use init,        only : nSlipSys, schmidt
-    use crystal,     only : fGammaDot, fGammaDotDDTauCrit
-    use hardening,   only : fDDTauCritDDGamma
+    use crystal,     only : fGammaDot, fDGammaDotDTauRatio
+    use hardening,   only : fDTauCritDotDGammaDot
     use deformation, only : fPrtlGreenStrain
 
     implicit none
-    real(kind = RKIND), intent(in)  :: iterVec(nSlipSys+9)
-    real(kind = RKIND), intent(in)  :: workArray(nSlipSys*8+100)
+    real(kind = RKIND), intent(in)  :: iterX(nSlipSys+9)
+    real(kind = RKIND), intent(in)  :: workArray(nSlipSys*6+100)
     real(kind = RKIND), intent(in)  :: temp
     real(kind = RKIND), intent(in)  :: dtime
-    real(kind = RKIND), intent(out) :: bigJac(nSlipSys+9, nSlipSys+9)
+    real(kind = RKIND), intent(out) :: iterLHS(nSlipSys+9, nSlipSys+9)
 
     real(kind = RKIND) :: stiffGlb(3, 3, 3, 3)
     real(kind = RKIND) :: dfGrdEls(3, 3)
@@ -381,37 +364,37 @@
     real(kind = RKIND) :: dGamma(nSlipSys)
     real(kind = RKIND) :: tauResl(nSlipSys)
     real(kind = RKIND) :: tauRatio(nSlipSys)
-    real(kind = RKIND) :: tauSign(nSlipSys)
     real(kind = RKIND) :: gammaDot(nSlipSys)
 
-    real(kind = RKIND) :: dGammaSign(nSlipSys)
     real(kind = RKIND) :: prtlTauResl(3, 3, nSlipSys)
 
-    real(kind = RKIND) :: dfactor(nSlipSys)
-    real(kind = RKIND) :: dfactor2(nSlipSys)
+    real(kind = RKIND) :: dGammaDotDTauRatio(nSlipSys)
+    real(kind = RKIND) :: dGammaDotDTauResl(nSlipSys)
+    real(kind = RKIND) :: dGammaDotDTauCrit(nSlipSys)
 
-    real(kind = RKIND) :: ddTauCritddGamma(nSlipSys, nSlipSys)
-    real(kind = RKIND) :: ddTauCritAux(nSlipSys, nSlipSys)
+    real(kind = RKIND) :: dTauCritDGamma(nSlipSys, nSlipSys)
+    real(kind = RKIND) :: dTauCritAux(nSlipSys, nSlipSys)
     real(kind = RKIND) :: aux3333(3, 3, 3, 3), aux3333_2(3, 3, 3, 3)
     real(kind = RKIND) :: aux33(3, 3), auxScalar1
     real(kind = RKIND) :: MJacob(3, 3, 3, 3)
     integer(kind = IKIND) :: i, j, k 
 
 
-    dfGrdEls = reshape(iterVec(1:9), (/3, 3/))
-    dGamma   = iterVec(10: 9+nSlipSys)
+    dfGrdEls = reshape(iterX(1:9), (/3, 3/))
+    dGamma   = iterX(10: 9+nSlipSys)
 
     stiffGlb        = reshape(workArray(1:81), (/3, 3, 3, 3/))
     dfGrdElsPrdInv  = reshape(workArray(82:90), (/3, 3/))
     gamma           = workArray(101+nSlipSys*2:  100+nSlipSys*3)
     tauCrit         = workArray(101+nSlipSys*3:  100+nSlipSys*4)
-    tauResl         = workArray(101+nSlipSys*4:  100+nSlipSys*5)
-    tauRatio        = workArray(101+nSlipSys*5:  100+nSlipSys*6)
-    tauSign         = workArray(101+nSlipSys*6:  100+nSlipSys*7)
-    gammaDot        = workArray(101+nSlipSys*7:  100+nSlipSys*8)
+    tauRatio        = workArray(101+nSlipSys*4:  100+nSlipSys*5)
+    gammaDot        = workArray(101+nSlipSys*5:  100+nSlipSys*6)
 
-    dfactor  = fGammaDotDDTauCrit(tauRatio, tauCrit, temp)
-    dfactor2 = dfactor*tauRatio*tauSign 
+    dGammaDotDTauRatio = fDGammaDotDTauRatio(tauRatio, temp)
+    dGammaDotDTauResl  = dGammaDotDTauRatio / tauCrit
+    ! This expression need a careful check later
+    dGammaDotDTauCrit  = -dGammaDotDTauResl * tauRatio 
+    !dfactor2 = dfactor*tauRatio*tauSign 
     !BOX11: partial Lp / partial Fe
     MJacob = 0.0d0
     do i = 1, 3
@@ -429,52 +412,52 @@
     do i = 1, nSlipSys
       do j = 1, 3
         do k = 1, 3
-          prtlTauResl(j, k, i) = dfactor(i) * sum(schmidt(:, :, i)*aux3333(:, :, j, k))
+          prtlTauResl(j, k, i) = dGammaDotDTauResl(i) * sum(schmidt(:, :, i)*aux3333(:, :, j, k))
         end do
       end do
       aux3333_2 = aux3333_2 + tenmul(schmidt(:, :, i), prtlTauResl(:, :, i))
     end do
   
 !    jacobNR = MJacob - aux3333_2
-!    CALL TENS3333(jacobNR, aux99)
-    bigJAC(1:9, 1:9) = Ten3333ToA99(MJacob - aux3333_2)
+    iterLHS(1:9, 1:9) = Ten3333ToA99(MJacob - aux3333_2)
 
     !BOX12: Partial Lp/ partial dgamma
-    ddTauCritDDGamma = fDDTauCritDDGamma(gamma, gammaDot, tauCrit, temp)
+    dTauCritDGamma = fDTauCritDotDGammaDot(gamma, gammaDot, tauCrit, temp)
     
-    dGammaSign = sign(1.0d0, dGamma)
+!    dGammaSign = sign(1.0d0, dGamma)
     do i = 1, nSlipSys
       do j = 1, nSlipSys
-        ddTauCritAux(i, j) = dfactor2(i)*dGammaSign(j)*ddTauCritDDGamma(i, j)
+!        ddTauCritAux(i, j) = dfactor2(i)*dGammaSign(j)*ddTauCritDDGamma(i, j)
+        dTauCritAux(i, j) = dGammaDotDTauCrit(i)*dTauCritDGamma(i, j)
       end do
     end do
 
     do i = 1, nSlipSys
       aux33 = 0.0d0
       do j = 1, nSlipSys
-        aux33 = aux33 + schmidt(:, :, j)*ddTauCritAux(j, i)
+        aux33 = aux33 + schmidt(:, :, j)*dTauCritAux(j, i)
       end do
-      bigJac(1:9, 9+i) = reshape(aux33, (/9/))
+      iterLHS(1:9, 9+i) = reshape(aux33, (/9/))
     end do
 
     !BOX21: Partial dgamma / partial Fe
     do i = 1, nSlipSys
-      bigJac(9+i, 1:9) = reshape(-dtime*prtlTauResl(:, :, i), (/9/))
+      iterLHS(9+i, 1:9) = reshape(-dtime*prtlTauResl(:, :, i), (/9/))
     end do
 
     ! BOX22: Partial dgamma/dgamma
-    bigJac(10:9+nSlipSys, 10:9+nSlipSys) = ddTauCritAux*dtime
+    iterLHS(10:9+nSlipSys, 10:9+nSlipSys) = dTauCritAux*dtime
     do i = 1, nSlipSys
-      bigJac(9+i, 9+i) = bigJac(9+i, 9+i) + 1.0d0
+      iterLHS(9+i, 9+i) = iterLHS(9+i, 9+i) + 1.0d0
     end do
 
-  end subroutine CalJAC
+  end subroutine FormIterLHS
 
 
 
   ! NUMERICAL PROBLEMS WITH LARGE CORRECTIONS-->PLASTIC PREDICTOR
-  subroutine CorOnLargeDef(iterVec, workArray,  phase, temp, dtime, pNewDt)
-    use utils,       only : RKIND, IKIND, UPDSIG, UPDJAC
+  subroutine CorOnLargeDef(iterX, workArray,  phase, temp, dtime, pNewDt)
+    use utils,       only : RKIND, IKIND, UPDSIG, UPDJac
     use algebra,     only : polarDcmp, ten4Rot
     use init,        only : nSlipSys, oriMatx, schmidt
     use deformation, only : fGreenStrain, fElasStress
@@ -482,8 +465,8 @@
     use hardening,   only : fTauCritDot
     implicit none
 
-    real(kind = RKIND), intent(inout) :: iterVec(nSlipSys+9)
-    real(kind = RKIND), intent(inout) :: workArray(nSlipSys*8+100)
+    real(kind = RKIND), intent(inout) :: iterX(nSlipSys+9)
+    real(kind = RKIND), intent(inout) :: workArray(nSlipSys*6+100)
     integer(kind = IKIND), intent(in) :: phase
     real(kind = RKIND), intent(in)    :: temp
     real(kind = RKIND), intent(in)    :: dtime
@@ -501,12 +484,11 @@
     real(kind = RKIND) :: tauResl(nSlipSys)
     real(kind = RKIND) :: tauCrit(nSlipSys)
     real(kind = RKIND) :: tauRatio(nSlipSys)
-    real(kind = RKIND) :: tauSign(nSlipSys)
     real(kind = RKIND) :: gammaDot(nSlipSys)
     real(kind = RKIND) :: dGamma(nSlipSys)
     real(kind = RKIND) :: absDGamma(nSlipSys)
     real(kind = RKIND) :: gamma(nSlipSys)
-    real(kind = RKIND) :: tauCritInc(nSlipSys)
+    real(kind = RKIND) :: tauCritDot(nSlipSys)
 
 
     stiffGlb  = reshape(workArray(1:81), (/3, 3, 3, 3/))
@@ -519,7 +501,7 @@
       sKirchRot  = fElasStress(stiffGlb, elasStrain)
       tauResl    = fTauResl(sKirchRot, schmidt(:, :, 1:nSlipSys))
       tauCrit    = workArray(101+nSlipSys*3 : 100+nSlipSys*4)
-      tauRatio   = dabs(tauResl/tauCrit)
+      tauRatio   = tauResl/tauCrit
   
       if (fStressDiverged(tauRatio)) then
         write(*, *) "Diverged tauResl/tauCrit detected!"
@@ -527,23 +509,21 @@
         return
       end if
   
-      tauSign   = sign(1.0d0, tauCrit)
-      gammaDot  = fGammaDot(tauRatio, tauSign, temp)
+      gammaDot  = fGammaDot(tauRatio, temp)
       dGamma    = gammaDot*dtime
-      absDGamma = dabs(dGamma)
-      gamma     = gamma0 + absDGamma
+      gamma     = gamma0 + dabs(dGamma)
   
-      tauCritInc = fTauCritDot(gamma, absDGamma, tauCrit, temp)
-      tauCrit    = tauCrit0 + tauCritInc
+      tauCritDot = fTauCritDot(gamma, gammaDot, tauCrit, temp)
+      tauCrit    = tauCrit0 + tauCritDot*dtime
 
-    else if (phase == UPDJAC) then
+    else if (phase == UPDJac) then
       dGamma  = 0.0d0
       gamma   = gamma0
       tauCrit = tauCrit0
     end if
 
-    iterVec(1:9)           = reshape(dfGrdEls, (/9/))
-    iterVec(10:9+nSlipSys) = dGamma
+    iterX(1:9)           = reshape(dfGrdEls, (/9/))
+    iterX(10:9+nSlipSys) = dGamma
 
     workArray(101+nSlipSys*2: 100+nSlipSys*3) = gamma
     workArray(101+nSlipSys*3: 100+nSlipSys*4) = tauCrit
@@ -553,17 +533,17 @@
 
 !
 ! ROTATE STRESSES TO DEFORMED CONFIGURATION  
-  subroutine PostConverge(iterVec, workArray, phase, temp, dtime, stress, ntens, statev, nstatv, rpl)
-    use utils,       only : RKIND, IKIND, UPDSIG, UPDJAC, UNITMAT
-    use algebra,     only : polarDcmp, matRot, ten4Rot
+  subroutine PostConverge(iterX, workArray, phase, temp, dtime, stress, ntens, statev, nstatv, rpl, npt, kinc)
+    use utils,       only : RKIND, IKIND, UPDSIG, UPDJac, UNITMAT
+    use algebra,     only : polarDcmp, multQBQt, matDet, ten4Rot
     use init,        only : nSlipSys, oriMatx, schmidt
     use crystal,     only : fStifLoc, fTauResl
     use deformation, only : fGreenStrain, fElasStress
 
     implicit none    
 
-    real(kind = RKIND),    intent(in)  :: iterVec(nSlipSys+9)
-    real(kind = RKIND),    intent(in)  :: workArray(nSlipSys*8+100)
+    real(kind = RKIND),    intent(in)  :: iterX(nSlipSys+9)
+    real(kind = RKIND),    intent(in)  :: workArray(nSlipSys*6+100)
     integer(kind = IKIND), intent(in)  :: phase
     real(kind = RKIND),    intent(in)  :: temp
     real(kind = RKIND),    intent(in)  :: dtime
@@ -572,6 +552,7 @@
     integer(kind = IKIND), intent(in)  :: nstatv
     real(kind = RKIND),    intent(out) :: statev(nstatv)
     real(kind = RKIND),    intent(out) :: rpl
+    integer(kind = IKIND), intent(in)  :: npt, kinc
 
     real(kind = RKIND) :: stiffGlb(3, 3, 3, 3)
 
@@ -588,19 +569,22 @@
     real(kind = RKIND) :: tauResl(nSlipSys)
     real(kind = RKIND) :: LpNew(3, 3)
     real(kind = RKIND) :: EulerAng(3)
+    
+    real(kind = RKIND) :: det
 
     real(kind = RKIND), parameter :: disFrc = 0.90d0
 
     integer(kind = RKIND) :: i
 
 
-    dfGrdElsNew = reshape(iterVec(1:9), (/3, 3/))
- 
-    call polarDcmp(dfGrdElsNew, RR, UU)
+    dfGrdElsNew = reshape(iterX(1:9), (/3, 3/))
+
     elasStrain = fGreenStrain(dfGrdElsNew)
     stiffGlb   = reshape(workArray(1:81), (/3, 3, 3, 3/))
     sigPK2     = fElasStress(stiffGlb, elasStrain)
-    sigCauchy  = matRot(sigPK2, transpose(RR))
+    sigCauchy  = multQBQt(sigPK2, dfGrdElsNew)
+    det        = matDet(dfGrdElsNew)
+    sigCauchy  = sigCauchy/det
     
     do i = 1, 3
       stress(i) = sigCauchy(i, i)
@@ -613,12 +597,16 @@
 
     if (phase == UPDSIG) then
       tauResl    = fTauResl(sigPK2, schmidt)
-      gammaDot   = workArray(101+nSlipSys*7: 100+nSlipSys*8)
+      gammaDot   = workArray(101+nSlipSys*5: 100+nSlipSys*6)
       rpl        = disFrc*sum(abs(tauResl*gammaDot))
 
-      dGammaNew  = iterVec(10:9+nSlipSys)
+      dGammaNew  = iterX(10:9+nSlipSys)
       gammaNew   = workArray(101+nSlipSys*2: 100+nSlipSys*3)
       tauCritNew = workArray(101+nSlipSys*3: 100+nSlipSys*4) 
+
+      if (npt == 1) then
+        write(*, '(I5, 5F14.8)') kinc, temp, gammaDot(1), tauCritNew(1), tauResl(1), stress(2)
+      end if
 
       dfGrdElsPrdInv = reshape(workArray(82:90), (/3, 3/))
       LpNew      = (UNITMAT - matmul(dfGrdElsPrdInv, dfGrdElsNew))/dtime
@@ -633,8 +621,8 @@
   
 
   subroutine UpdJacob(dfGrd0, dfGrd1, statev0, statev1, nstatv, phase, temp, dtime, &
-                      stress, ntens, ddsdde, pNewDt)
-    use utils,     only : RKIND, IKIND, UNITMAT, UPDJAC
+                      stress, ntens, ddsdde, pNewDt, npt, kinc)
+    use utils,     only : RKIND, IKIND, UNITMAT, UPDJac
     use init,      only : epsInc, oriMatx
     use crystal,   only : fStifLoc
     use algebra,   only : ten4Rot, ten3333ToA66
@@ -654,6 +642,7 @@
     real(kind = RKIND),    intent(out) :: ddsdde(ntens, ntens)
     real(kind = RKIND),    intent(out) :: pNewDt
 
+    integer(kind = IKIND), intent(in)  :: npt, kinc
 
     real(kind = RKIND) :: stressJac(ntens)
     real(kind = RKIND) :: statevJac(nstatv)
@@ -668,12 +657,14 @@
     integer(kind = IKIND) :: iStep, idx1, idx2
     real(kind = RKIND)    :: dummyRpl
 
+
+    if (pNewDt < 1.0) return
 !   General loop on the 6 perturbations to obtain Jacobian
 !   On each istep a whole NR problem is solved to get the corresponding stress
     halfEpsInc = 0.5d0*epsInc
-    dltEpsJAC  = reshape((/    epsInc, halfEpsInc, halfEpsInc,             &
-                           halfEpsInc,     epsInc, halfEpsInc,             &
-                           halfEpsInc, halfEpsInc,     epsInc/), (/3, 3/))
+    dltEpsJac = reshape((/    epsInc, halfEpsInc, halfEpsInc,             &
+                          halfEpsInc,     epsInc, halfEpsInc,             &
+                          halfEpsInc, halfEpsInc,     epsInc/), (/3, 3/))
 
     idxi = (/1, 2, 3, 1, 1, 2/)
     idxj = (/1, 2, 3, 2, 3, 3/)
@@ -689,7 +680,7 @@
 
       statevJac = statev1
       call UpdStress(dfGrd0, dfGrd1Jac, statev0, statevJac, nstatv, phase, temp, dtime,   &
-                     stressJac, ntens, dummyRpl, pNewDt) 
+                     stressJac, ntens, dummyRpl, pNewDt, npt, kinc) 
 
       if (pNewDt < 1.0d0) then
         stiffLoc = fStifLoc(temp)

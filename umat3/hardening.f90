@@ -25,7 +25,7 @@
       integer(kind = IKIND), intent(in) :: nSlipSystems
       integer(kind = IKIND), intent(in) :: systemSet(nSlipSystems)
 
-      character(len = 100)  :: line
+      character(len = 256)  :: line
       integer(kind = IKIND) :: ii
       
 
@@ -58,7 +58,7 @@
       integer(kind = IKIND), intent(in) :: nSlipSets
       integer(kind = IKIND), intent(in) :: systemSet(nSlipSys)
 
-      character(len = 100) :: line
+      character(len = 256) :: line
 
       real(kind = RKIND) :: qsys(MAX_SLIP_SETS, MAX_SLIP_SETS)
       real(kind = RKIND) :: tau0_set(MAX_SLIP_SETS)
@@ -115,7 +115,7 @@
       integer(kind = IKIND), intent(in) :: nSlipSets
       integer(kind = IKIND), intent(in) :: systemSet(nSlipSys)
 
-      character(len = 100) :: line
+      character(len = 256) :: line
 
       real(kind = RKIND) :: qsys(MAX_SLIP_SETS, MAX_SLIP_SETS)
       real(kind = RKIND) :: tau0_set(MAX_SLIP_SETS)
@@ -181,7 +181,7 @@
       integer(kind = IKIND), intent(in) :: systemSet(nSlipSys)
 
       real(kind = RKIND)   :: h0, tau0, taus0, gammas0, ma
-      character(len = 100) :: line
+      character(len = 256) :: line
 
      
       call readLine(fID, line)

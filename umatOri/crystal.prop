@@ -1,0 +1,26 @@
+# Name: AA6116 Al
+# C11, C12,C14
+108d3,62d3,28d3
+#Viscoplastic law: gamma_0, exponent
+1.,0.02
+# Set of slip systems, Total number of systems
+1,12
+# normalv, tangent, set
+  1 , 1 , 1 , 1 , -1 , 0,   1
+  1 , 1 , 1 , 0 , -1 , 1,   1
+  1 , 1 , 1 , -1 , 0 , 1 ,   1
+  1 , -1 , 1 , 1 , 1 , 0,   1
+  1 , -1 , 1 , 0 , 1 , 1 ,   1
+  1 , -1 , 1 , -1 , 0 , 1 ,   1
+ -1 ,-1 , 1 , 1 , -1 , 0 ,   1
+ -1 ,-1 , 1 , 0 , 1 ,  1 ,   1
+ -1 ,-1 , 1 , 1 , 0 ,  1 ,   1 
+  -1 ,1 , 1 , 1,  1 ,  0 ,   1 
+  -1 ,1 , 1 , 0 , -1 ,1 ,   1
+  -1 ,1 , 1 , 1 , 0 , 1 ,   1 
+# q(alfa,alfa), q(alfa,beta)
+1.
+# Single crystal behavior based on Asaro-Needleman: tau0,taus,h0
+116,119,793
+# Control of subroutine: TOLER, TOLER_JAC, Nmax iter, Nmax iter JAC
+1d-10,.1D-10,50,20,5D-5,0

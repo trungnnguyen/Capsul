@@ -1,13 +1,13 @@
   module init
     use utils,             only : IKIND, RKIND, LKIND
     use typeCrysPlasMat,   only : CrysPlasMat 
-    use typeCrysPlasMatPt, only : CrysPlasMatPt 
+!    use typeCrysPlasMatPt, only : CrysPlasMatPt 
     
     implicit none
 
     logical(kind = LKIND) :: initialized = .false.
     class(CrysPlasMat),   pointer :: pCrysPlasMat   => null()
-    class(CrysPlasMatPt), pointer :: pCrysPlasMatPt => null() 
+!    class(CrysPlasMatPt), pointer :: pCrysPlasMatPt => null() 
 
   contains
 
@@ -31,7 +31,7 @@
       fileName = outDir(1:lenOutDir) // "/" // CRYS_FILE_NAME
       open(unit = CRYS_FILE_ID, file = fileName, status = 'old')
       pCrysPlasMat   => CrysPlasMat(CRYS_FILE_ID, isTempDep, tempInit)
-      pCrysPlasMatPt => CrysPlasMatPt(pCrysPlasMat)
+!      pCrysPlasMatPt => CrysPlasMatPt(pCrysPlasMat)
       close(unit = CRYS_FILE_ID)
   
     end subroutine Initialization

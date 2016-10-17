@@ -29,8 +29,8 @@ crysPlasMatPoint-std.o:	crysPlasMatPoint.f90 crysPlasMat-std.o
 	$(FC) $(FFLAGS) -c $< -o $@
 init-std.o:	init.f90 crysPlasMat-std.o
 	$(FC) $(FFLAGS) -c $< -o $@
-#capsul.o: capsul.f utils-std.o algebra-std.o init-std.o
-#	$(FC) $(FFLAGS) -c $< -o $@
+capsul.o: capsul.f utils-std.o algebra-std.o init-std.o
+	$(FC) $(FFLAGS) -c $< -o $@
 clean:
 	rm *.mod *.o
 .PHONY: capsul clean

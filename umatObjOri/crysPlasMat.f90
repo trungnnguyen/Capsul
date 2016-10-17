@@ -215,14 +215,8 @@
 
     subroutine ParseInput(this, fID)
       use utils, only : ReadLine
-      include "crystalElasticity.inc"
-      use typeThermoExpa
-      use typeThermoExpaIso
-      use typeThermoExpaAniso
-      include "slipGeometry.inc"
-      include "slipKinetics.inc"
-      include "slipHardening.inc"
-
+      include 'typedecl.inc'
+      
       class(CrysPlasMat)                :: this
       integer(kind = IKIND), intent(in) :: fID
 

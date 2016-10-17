@@ -42,6 +42,7 @@
 !    dfGrdTh1 = fDfGrdTh(temp1)
 !    dfGrdMe0 = matmul(dfGrd0, matInv(dfGrdTh0))
 !    dfGrdMe1 = matmul(dfGrd1, matInv(dfGrdTh1))
+    
 
 
     call UpdStress(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp1, dtime,        &
@@ -49,13 +50,13 @@
                
 
 
-    write(*, *) "stress = ", stress
 
     ! Update the jacob matrix -- ddsdde
     phase = UPDJAC
     call UpdJacob(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp1, dtime,        & 
                   stress, ntens, ddsdde, pNewDt, npt, kinc)
 
+    write(*, *) "KINC = ", KINC, " NPT = ", NPT, " STRESS = ", STRESS
 
   end subroutine umat_cp3
 
@@ -228,13 +229,9 @@
     iter = 1
     processed = .false.
     do while (iter <= nIters)
-      write(*, *) "FEls   = ", iterX(1:9)
-      write(*, *) "dGamma = ", iterX(10:21)
       call FormIterRes(iterX, temp, dtime, iterRes, workArray, pNewDt)
       if (pNewDt < 1.0d0) return
       normRHS = vecNorm(iterRes)
-      write(*, *) "XX = ", iterX(1:15)
-      write(*, *) "iter = ", iter, " RHS = ", iterRes(1:15)
       if (normRHS <= iterTol) exit
 
       if (normRHS > BIGNORM .and. .not. processed) then
@@ -244,7 +241,6 @@
       else
         call FormIterLHS(iterX, workArray, temp, dtime, iterLHS)
         call GaussJordan(iterLHS, iterRes, iterXInc, iflag)
-        write(*, *) "iter = ", iter, " DX = ", iterXInc(1:15)
         if (iflag == 1) then
           pNewDt = 0.5d0
           return
@@ -252,7 +248,6 @@
         
         call UpdIterVec(iterX, iterXInc, workArray, temp)
 
-        normXInc = vecNorm(iterXInc)
         if (normXInc > BIGNORM)  call CorOnLargeDef(iterX, workArray, phase, temp, dtime, pNewDt)
 
       end if
@@ -356,17 +351,11 @@
     end if
 
     gammaDot  = fGammaDot(tauRatio, temp)
-    write(*, *) "FElsNew = ", dfGrdEls
-    write(*, *) "tauResl = ", tauResl
-    write(*, *) "tauCrit = ", tauCrit
-    write(*, *) "gamaDot = ", gammaDot
 
-    LpNew = fLp(gammaDot, schmidt(:, :, 1:nSlipSys))
-    LpPrd = (UNITMAT - matmul(dfGrdElsPrdInv, dfGrdEls))/dtime
+    LpPrd = fLp(gammaDot, schmidt(:, :, 1:nSlipSys))
+    LpNew = (UNITMAT - matmul(dfGrdElsPrdInv, dfGrdEls))/dtime
 
-    write(*, *) "LpPrd = ", dfGrdElsPrdInv
-    write(*, *) "LpNew = ", LpNew
-    iterRes(1 : 9)          = reshape(LpPrd - LpNew, (/9/))
+    iterRes(1 : 9)          = reshape(LpNew - LpPrd, (/9/))
     iterRes(10: 9+nSlipSys) = dGamma - gammaDot*dtime
    
     workArray(101+nSlipSys*4: 100+nSlipSys*5) = tauRatio
@@ -431,8 +420,6 @@
     dGammaDotDTauResl  = dGammaDotDTauRatio / tauCrit
     ! This expression need a careful check later
     dGammaDotDTauCrit  = -dGammaDotDTauResl * tauRatio 
-    write(*, *) "dd1 = ", dGammaDotDTauResl
-    write(*, *) "dd2 = ", dGammaDotDTauCrit
     !dfactor2 = dfactor*tauRatio*tauSign 
     !BOX11: partial Lp / partial Fe
     MJacob = 0.0d0

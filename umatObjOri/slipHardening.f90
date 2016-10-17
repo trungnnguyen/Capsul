@@ -203,6 +203,12 @@
         call ReadLine(fID, line) 
         read(line, *) (auxQab(i, j), j = 1, numSlipSet)
       end do
+
+      do i = 1, this%fNumSlipSys
+        do j = 1, this%fNumSlipSys
+          this%fQab(i, j) = auxQab(slipSet(i), slipSet(j))
+        end do
+      end do
   
       call this%InitHardQnts(fID, numSlipSet, slipSet, kNumMatProp, kNumMatAux)
 
@@ -321,7 +327,9 @@
       end do
   
       do i = 1, this%fNumSlipSys
-        this%fQab(i, j) = auxQab(slipSet(i), slipSet(j))
+        do j = 1, this%fNumSlipSys
+          this%fQab(i, j) = auxQab(slipSet(i), slipSet(j))
+        end do
       end do
   
   

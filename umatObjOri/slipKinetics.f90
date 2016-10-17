@@ -234,7 +234,7 @@ contains
 
     do i = 1, this%fNumSlipSys
 !      DSlipRateDTauCrit(i) = aux1*this%Power(dabs(tauRatio(i)), aux2)*tauResl(i)
-      DSlipRateDTauCrit(i) = aux1*dabs(tauRatio(i)**aux2)*tauResl(i)
+      DSlipRateDTauCrit(i) = aux1*dabs(tauRatio(i)**aux2)/tauCrit(i)*tauRatio(i)
     end do
 
 

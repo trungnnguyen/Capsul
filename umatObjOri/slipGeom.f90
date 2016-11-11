@@ -2,10 +2,10 @@ module typeSlipGeom
   use utils, only : RKIND, IKIND
   implicit none
 
-  integer(kind = IKIND), public, parameter :: kFCC  = 1
-  integer(kind = IKIND), public, parameter :: kBCC  = 2
-  integer(kind = IKIND), public, parameter :: kHCP  = 3
-  integer(kind = IKIND), public, parameter :: kUSER = 4
+  integer(kind = IKIND), public, parameter :: kSGFCC  = 1
+  integer(kind = IKIND), public, parameter :: kSGBCC  = 2
+  integer(kind = IKIND), public, parameter :: kSGHCP  = 3
+  integer(kind = IKIND), public, parameter :: kSGUSER = 4
 
   !********* Declaration of base class SlipGeom
   type, abstract, public :: SlipGeom

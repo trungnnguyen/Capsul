@@ -16,9 +16,11 @@
 
   use typeSlipKine
   use typeSlipKinePowLaw1
+  use typeSlipKineFrostAshby
 
   use typeSlipHard
   use typeSlipHardAN
   use typeSlipHardVT
   use typeSlipHardVK
+  use typeSlipHardFA
 

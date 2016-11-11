@@ -56,8 +56,7 @@
     call UpdJacob(dfGrd0, dfGrd1, statev0, statev, nstatv, phase, temp1, dtime,        & 
                   stress, ntens, ddsdde, pNewDt, npt, kinc)
 
-    write(*, *) "KINC = ", KINC, " NPT = ", NPT, " STRESS = ", STRESS
-
+ !   write(*, *) "KINC = ", KINC, "NPT = ", NPT, "STRESS = ", STRESS(2), "RPL = ", RPL, "TEMP = ", TEMP
   end subroutine umat_cp3
 
 
@@ -232,6 +231,7 @@
       call FormIterRes(iterX, temp, dtime, iterRes, workArray, pNewDt)
       if (pNewDt < 1.0d0) return
       normRHS = vecNorm(iterRes)
+      write(*, *) "iter = ", iter, "stage = ", phase, "normRHS = ", normRHS
       if (normRHS <= iterTol) exit
 
       if (normRHS > BIGNORM .and. .not. processed) then
@@ -362,6 +362,10 @@
     workArray(101+nSlipSys*5: 100+nSlipSys*6) = gammaDot
 
     
+    write(*, *) "RHS(1:9) = ", iterRes(1:9)
+    write(*, *) "RHS(10:) = ", iterRes(10:9+nSlipSys)
+    write(*, *) "gammaDot = ", gammaDot
+
   end subroutine FormIterRes
 
 
@@ -631,7 +635,7 @@
       tauCritNew = workArray(101+nSlipSys*3: 100+nSlipSys*4) 
 
       if (npt == 1) then
- !       write(*, '(I5, 5F14.8)') kinc, gammaDot(1), tauCritNew(1), tauResl(1), stress(2)
+        write(*, '(I5, 5F14.8)') kinc, gammaDot(1), tauCritNew(1), tauResl(1), stress(2)
       end if
 
       dfGrdElsPrdInv = reshape(workArray(82:90), (/3, 3/))

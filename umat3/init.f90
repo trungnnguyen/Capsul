@@ -51,6 +51,7 @@
 
       do ii = 1, nSlipSys
         schmidt(:, :, ii) = matRot(schmidtLoc(:, :, ii), transpose(oriMatx))
+        write(*, *) "schmidt ", ii, " = ", schmidt(:, :, ii)
       end do
   
 

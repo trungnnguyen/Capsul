@@ -262,7 +262,6 @@
       do ii = 1, this%fNumSlipSys
         hii = h0(ii)*aux(ii)*aux(ii)
         do jj = 1, this%fNumSlipSys
-       !   hjj = h0(jj)*aux(jj)*aux(jj)
           HardMatrix(ii, jj) = this%fQab(ii, jj)*hii
         end do
       end do
@@ -636,7 +635,7 @@
   
       do i = 1, this%fNumSlipSys
         do j = 1, this%fNumSlipSys
-    !      this%fQab(i, j) = auxQab(slipSet(i), slipSet(j))
+          this%fQab(i, j) = auxQab(slipSet(i), slipSet(j))
           if (i == j) then
             this%fQab(i, j) = 1.0d0
           else
@@ -725,6 +724,7 @@
       real(kind = RKIND) :: tauSatur(this%fNumSlipSys)
       real(kind = RKIND) :: aux1(this%fNumSlipSys)
       real(kind = RKIND) :: aux2(this%fNumSlipSys)
+      real(kind = RKIND) :: hii
       integer(kind = IKIND) :: ii, jj
 
 
@@ -739,6 +739,7 @@
       aux1 = 1.0d0 - tauCrit/tauSatur
       aux2 = h0*(abs(aux1)**r1)*sign(1.0d0, aux1)
       do ii = 1, this%fNumSlipSys
+       ! hii = h0(ii)*abs(aux(ii))**r1(ii)*sign(1.0d0, aux(ii))
         do jj = 1, this%fNumSlipSys
           HardMatrix(ii, jj) = this%fQab(ii, jj)*aux2(jj)
         end do

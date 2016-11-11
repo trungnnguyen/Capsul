@@ -2,9 +2,9 @@ module typeCrysElas
   use utils, only : RKIND, IKIND, LKIND
   implicit none
 
-  integer(kind = RKIND), public, parameter :: kIso   = 1
-  integer(kind = RKIND), public, parameter :: kCubic = 2
-  integer(kind = RKIND), public, parameter :: kAniso = 3
+  integer(kind = RKIND), public, parameter :: kCEIso   = 1
+  integer(kind = RKIND), public, parameter :: kCECubic = 2
+  integer(kind = RKIND), public, parameter :: kCEAniso = 3
 
   type, abstract, public :: CrysElas
     real(kind = RKIND) :: fModuli(3, 3, 3, 3)

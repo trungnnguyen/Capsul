@@ -11,6 +11,7 @@
       real(kind = RKIND)    :: fStress(6) 
       real(kind = RKIND)    :: fDSigDEps(6, 6) 
       real(kind = RKIND)    :: fRpl 
+      real(kind = RKIND)    :: fNewDt
 
       class(CrysPlasMat),  pointer :: fCrysPlasMat
       real(kind = RKIND)    :: fDt
@@ -43,11 +44,11 @@
       real(kind = RKIND)    :: fCijkl(3, 3, 3, 3)
       real(kind = RKIND), allocatable :: fSchmidt(:, :, :)
 
-      real(kind = RKIND)    :: fNewDt
 
       logical(kind = LKIND) :: fIsTempDep
 
     contains
+      procedure, public  :: InitMatPt
       procedure, public  :: AdvanceStep
       procedure, public  :: InitStateVar
       procedure, public  :: LoadStateVar
@@ -91,15 +92,35 @@
 
   contains
   
-    function Constructor(pCrysPlasMat) result(this)
-      use utils, only : UNITMAT
+    function Constructor() result(this)
+      use  algebra, only : UNITMAT
       type(CrysPlasMat),   pointer :: pCrysPlasMat
       type(CrysPlasMatPt), pointer :: this
   
 
       allocate(this)
 
+      this%fCrysPlasMat => NULL()
+      
+    end function Constructor
+          
+
+
+    subroutine InitMatPt(this, pCrysPlasMat, ansyType)
+      use  algebra, only : UNITMAT
+
+      class(CrysPlasMatPt) :: this
+      class(CrysPlasMat), pointer :: pCrysPlasMat
+      integer(kind = IKIND), intent(in) :: ansyType
+  
+
       this%fCrysPlasMat => pCrysPlasMat
+
+      if (ansyType == 0) then
+        this%fIsTempDep  = .false.
+      else
+        this%fIsTempDep  = .true.
+      end if
 
       this%fNumSlipSys  = this%fCrysPlasMat%GetNumSlipSys()
 
@@ -129,7 +150,6 @@
 
       this%fDt         = 0.0d0
       this%fNewDt      = 1.0d0
-      this%fIsTempDep  = .false.
 
       this%fRotMatx    = UNITMAT
       this%fEulerAng   = (/0.0d0, 0.0d0, 0.0d0/)
@@ -146,9 +166,9 @@
       allocate(this%fSchmidt(3, 3, this%fNumSlipSys))
       this%fSchmidt = 0.0d0
 
+    end subroutine InitMatPt
 
-    end function Constructor
-          
+
 
 
     subroutine Destructor(this)
@@ -166,6 +186,7 @@
     end subroutine Destructor
 
 
+   
 
     subroutine FormRotMatx(this, oriArray)
       use algebra, only : normalize, cross_product
@@ -343,6 +364,7 @@
             
     subroutine AdvanceStep(this, FTotOld, FTotNew, TempOld, TempNew, statev, nstatv, dtime)
       use algebra, only : Ten3333ToA66
+
       class(CrysPlasMatPt) :: this
       real(kind = RKIND),    intent(in) :: FTotOld(3, 3)
       real(kind = RKIND),    intent(in) :: FTotNew(3, 3)
@@ -353,9 +375,12 @@
       real(kind = RKIND),    intent(in) :: dtime
 
       real(kind = RKIND) :: stressNew(6)
+      real(kind = RKIND) :: fNewDt
       real(kind = RKIND) :: statevOld(nstatv)
       real(kind = RKIND) :: statevNew(nstatv)
       real(kind = RKIND) :: statevCvg(nstatv)
+      real(kind = RKIND) :: tauReslCvg(this%fNumSlipSys)
+      real(kind = RKIND) :: gammaDotCvg(this%fNumSlipSys)
 
       integer(kind = IKIND) :: stage
 
@@ -367,12 +392,16 @@
       stressNew = this%fStress
       call this%SaveStateVar(statevCvg, nstatv)
 
+      tauReslCvg  = this%fTauResl
+      gammaDotCvg = this%fGammaDot 
 
       stage = kUpdJac
       statevOld = statev
       statevNew = statevCvg
       call this%UpdateJacob(FTotOld, FTotNew, TempOld, TempNew, statevOld, statevNew, nstatv, dtime, stage)
       this%fStress = stressNew
+      this%fTauResl  = tauReslCvg
+      this%fGammaDot = gammaDotCvg 
      
       call this%ResetStateVar(statevCvg, nstatv)
 
@@ -451,8 +480,7 @@
 
 
     subroutine UpdateJacob(this, FTotOld, FTotNew, TempOld, TempNew, statevOld, statevNew, nstatv, dtime, stage)
-      use utils,   only : UNITMAT
-      use algebra, only : Ten3333ToA66
+      use algebra, only : UNITMAT, Ten3333ToA66
 
       class(CrysPlasMatPt) :: this
       real(kind = RKIND),    intent(in) :: FTotOld(3, 3)
@@ -469,7 +497,7 @@
       real(kind = RKIND) :: FTotJac(3, 3)
       real(kind = RKIND) :: statevBak(nstatv)
 
-      real(kind = RKIND), parameter :: epsInc = 5.0d-5
+      real(kind = RKIND) :: epsInc
       real(kind = RKIND)    :: halfEpsInc
       real(kind = RKIND)    :: dltEpsJac(3, 3)
       real(kind = RKIND)    :: sigCvg(6)
@@ -477,6 +505,8 @@
       real(kind = RKIND)    :: dGammaCvg(this%fNumSlipSys)
       integer(kind = IKIND) :: idx1, idx2, idxi(6), idxj(6), iComp
 
+
+      epsInc = 5.0d-5
 
       if (this%fNewDt < 1.0d0) return
 
@@ -551,7 +581,8 @@
       class(CrysPlasMatPt) :: this
       integer(kind = IKIND), intent(in) :: stage
   
-      real(kind = RKIND), parameter :: kBigNorm = 1.0d10
+      !real(kind = RKIND), parameter :: kBigNorm = 1.0d10
+      real(kind = RKIND) :: kBigNorm
   
       real(kind = RKIND) :: LHS(9+this%fNumSlipSys, 9+this%fNumSlipSys)
       real(kind = RKIND) :: RHS(9+this%fNumSlipSys)
@@ -570,11 +601,21 @@
       integer(kind = IKIND) :: iflag
   
 
-      integer(kind = IKIND), parameter :: maxItersSig = 100
-      integer(kind = IKIND), parameter :: maxItersJac = 40
-      real(kind    = RKIND), parameter :: tolerSig    = 1.0d-10
-      real(kind    = RKIND), parameter :: tolerJac    = 1.0d-11
+      !integer(kind = IKIND), parameter :: maxItersSig = 100
+      !integer(kind = IKIND), parameter :: maxItersJac = 40
+      !real(kind    = RKIND), parameter :: tolerSig    = 1.0d-10
+      !real(kind    = RKIND), parameter :: tolerJac    = 1.0d-11
 
+      integer(kind = IKIND) :: maxItersSig
+      integer(kind = IKIND) :: maxItersJac
+      real(kind    = RKIND) :: tolerSig   
+      real(kind    = RKIND) :: tolerJac   
+
+      kBigNorm    = 1.0d10
+      maxItersSig = 100
+      maxItersJac = 40
+      tolerSig    = 1.0d-10
+      tolerJac    = 1.0d-11
 
       call this%InitXX(stage, XX, auxIter)
   
@@ -592,6 +633,7 @@
       do while (iter <= nIters)
         call this%FormRHS(auxIter, RHS, pNewDt)
         normRHS = vecNorm(RHS)
+      !  write(*, *) "iter = ", iter, "stage = ", stage, "normRHS = ", normRHS
         if (normRHS <= iterTol) exit
         if (normRHS > kBigNorm .and. .not. processed) then
           call this%Correction(stage, auxIter, XX, pNewDt)
@@ -619,7 +661,7 @@
   
       if (iter >= nIters .and. stage == kUpdSig) then
         write(*, *) "Max iterations reached!"
-        pNewDt      = 0.75d0
+        pNewDt      = 0.50d0
         this%fNewDt = min(this%fNewDt, pNewDt)
       end if
   
@@ -628,21 +670,26 @@
 
 
     subroutine PostStep(this, stage)
-      use utils,     only : UNITMAT
-      use algebra,   only : multQBQt, matDet, matInv
+      use algebra,   only : multQBQt, matDet, matInv, UNITMAT
 
       class(CrysPlasMatPt) :: this
       integer(kind = IKIND), intent(in) :: stage
+
+      real(kind = RKIND) :: disFrc
+      !real(kind = RKIND), parameter :: disFrc = 0.9d0
 
       real(kind = RKIND) :: elsGrn(3, 3)
       real(kind = RKIND) :: sigPK2(3, 3)
       real(kind = RKIND) :: sigCauchy(3, 3)
       real(kind = RKIND) :: FTotInc(3, 3)
+      real(kind = RKIND) :: FThNew(3, 3)
       real(kind = RKIND) :: FElsPrd(3, 3)
       real(kind = RKIND) :: det
 
       integer(kind = IKIND) :: i, idxi(6), idxj(6)
 
+
+      disFrc = 1.0d0
 
       if (this%fNewDt < 1.0d0) return
 
@@ -652,7 +699,12 @@
         this%fLPlsNew = (UNITMAT - matmul(matInv(FElsPrd), this%fFElsNew))/this%fDt
       end if
 
-      elsGrn    = this%GreenStrain(this%fFElsNew)
+      if (this%fIsTempDep) then
+        FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
+      else
+        FThNew  = UNITMAT
+      end if
+      elsGrn    = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
       sigPK2    = this%ElasticStress(elsGrn)
       sigCauchy = multQBQt(sigPK2, this%fFElsNew)
       det       = matDet(this%fFElsNew)
@@ -664,6 +716,11 @@
         this%fStress(i) = sigCauchy(idxi(i), idxj(i))
       end do
       
+      if (stage == kUpdSig) then
+        this%fTauResl  = this%ResolvedSlipStress(sigPK2)
+        this%fGammaDot = this%fCrysPlasMat%GetSlipRate(this%fTauResl, this%fTauCritNew, this%fTempNew)
+        this%fRpl      = disFrc*sum(dabs(this%fTauResl*this%fGammaDot))
+      end if
       
     end subroutine PostStep
       
@@ -671,8 +728,7 @@
 
 
     subroutine InitXX(this, stage, XX, auxIter)
-      use utils,   only : UNITMAT
-      use algebra, only : matInv, polarDcmp
+      use algebra, only : UNITMAT, matInv, polarDcmp
 
       class(CrysPlasMatPt) :: this
       integer(kind = IKIND), intent(in) :: stage
@@ -681,6 +737,9 @@
 
       real(kind = RKIND) :: FTotInc(3, 3)
       real(kind = RKIND) :: FElsPrd(3, 3)
+      real(kind = RKIND) :: FThNew(3, 3)
+      real(kind = RKIND) :: elsEGrn(3, 3)
+      real(kind = RKIND) :: sigPK2(3, 3)
       real(kind = RKIND) :: RR(3, 3)
       real(kind = RKIND) :: UU(3, 3)
 
@@ -691,7 +750,17 @@
       if (stage == kUpdSig) then
         this%fFElsNew = matmul(FElsPrd, UNITMAT - this%fLPlsOld*this%fDt)
       end if
-      
+    !  if (this%fIsTempDep) then
+    !    FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
+    !  else
+    !    FThNew  = UNITMAT
+    !  end if
+    !  elsEGrn        = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
+    !  sigPK2         = this%ElasticStress(elsEGrn)
+    !  this%fTauResl  = this%ResolvedSlipStress(sigPK2)
+    !  this%fGammaDot = this%fCrysPlasMat%GetSlipRate(this%fTauResl, this%fTauCritOld, this%fTempNew)
+    !  this%fDGamma   = this%fGammaDot*this%fDt
+  
 
       XX(1:  9) = reshape(this%fFElsNew, (/9/))
       XX(10: 9+this%fNumSlipSys) = this%fDGamma
@@ -710,28 +779,36 @@
 
     ! Calculate the residual (right hand section(RHS) of the equation) in each N-R iteration  
     subroutine FormRHS(this, auxIter, RHS, pNewDt)
-      use utils,   only : UNITMAT
-      use algebra, only : vecNorm
+      use algebra, only : vecNorm, matInv, UNITMAT
   
       class(CrysPlasMatPt) :: this
       real(kind = RKIND), intent(in)  :: auxIter(18)
       real(kind = RKIND), intent(out) :: RHS(9+this%fNumSlipSys)
       real(kind = RKIND)              :: pNewDt
   
+      real(kind = RKIND) :: FThNew(3, 3)
       real(kind = RKIND) :: elsEGrn(3, 3)
       real(kind = RKIND) :: sigPK2(3, 3)
       real(kind = RKIND) :: LPlsCur(3, 3)
       real(kind = RKIND) :: FElsPrdInv(3, 3)
   
-      elsEGrn        = this%GreenStrain(this%fFElsNew)
-      sigPK2         = this%ElasticStress(elsEGrn)
-      this%fTauResl  = this%ResolvedSlipStress(sigPK2)
+      if (this%fIsTempDep) then
+        FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
+      else
+        FThNew  = UNITMAT
+      end if
+
+      elsEGrn       = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
+      sigPK2        = this%ElasticStress(elsEGrn)
+      this%fTauResl = this%ResolvedSlipStress(sigPK2)
       if (this%fCrysPlasMat%GetStressDivergenceState(this%fTauResl, this%fTauCritNew)) then
         write(*, *) "Diverged tauResl/tauCrit detected!"
         pNewDt = min(pNewDt, 0.75d0)
         return
       end if
 
+     ! write(*, *) "tauResl = ", this%fTauResl
+     ! write(*, *) "tauCrit = ", this%fTauCritNew
       this%fGammaDot = this%fCrysPlasMat%GetSlipRate(this%fTauResl, this%fTauCritNew, this%fTempNew)
       LPlsCur  = this%VelocityGradientPlastic(this%fGammaDot)
 
@@ -742,14 +819,16 @@
       RHS(1: 9)  = reshape(this%fLPlsNew - LPlsCur, (/9/))
       RHS(10: 9+this%fNumSlipSys) = this%fDGamma - this%fGammaDot*this%fDt
      
+     ! write(*, *) "RHS(1:9) = ", RHS(1:9)
+     ! write(*, *) "RHS(10:) = ", RHS(10:9+this%fNumSlipSys)
+     ! write(*, *) "gammaDot = ", this%fGammaDot
 
     end subroutine FormRHS
 
 
 
     subroutine FormLHS(this, auxIter, LHS)
-      use utils,   only : UNITMAT
-      use algebra, only : tenmul, MultAijmnBmnkl, ten3333ToA99
+      use algebra, only : UNITMAT, tenmul, MultAijmnBmnkl, ten3333ToA99
 
       class(CrysPlasMatPt) :: this
       real(kind = RKIND), intent(in) :: auxIter(18)
@@ -841,8 +920,9 @@
   
 
 
+
     subroutine UpdateXX(this, auxIter, XX, dX) 
-      use utils, only : UNITMAT
+      use algebra, only : UNITMAT
 
       class(CrysPlasMatPt) :: this 
       real(kind = RKIND), intent(in) :: auxIter(18)
@@ -872,12 +952,15 @@
 
     ! NUMERICAL PROBLEMS WITH LARGE CORRECTIONS-->PLASTIC PREDICTOR
     subroutine Correction(this, stage, auxIter, XX, pNewDt)
+      use algebra,  only : matInv, UNITMAT
+
       class(crysPlasMatPt) :: this
       integer(kind = IKIND), intent(in) :: stage
       real(kind = RKIND),    intent(in) :: auxIter(18)
       real(kind = RKIND)                :: XX(9+this%fNumSlipSys)
       real(kind = RKIND)                :: pNewDt
   
+      real(kind = RKIND) :: FThNew(3, 3)
       real(kind = RKIND) :: elsEGrn(3, 3)
       real(kind = RKIND) :: sigPK2(3, 3)
       real(kind = RKIND) :: tauCritDot(this%fNumSlipSys)
@@ -885,9 +968,14 @@
  
       this%fFElsNew =  reshape(auxIter(10:18), (/3, 3/))
       if (stage == kUpdSig) then
-        elsEGrn        = this%GreenStrain(this%fFElsNew)
-        sigPK2         = this%ElasticStress(elsEGrn)
-        this%fTauResl  = this%ResolvedSlipStress(sigPK2)
+        if (this%fIsTempDep) then
+          FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
+        else
+          FThNew  = UNITMAT
+        end if
+        elsEGrn       = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
+        sigPK2        = this%ElasticStress(elsEGrn)
+        this%fTauResl = this%ResolvedSlipStress(sigPK2)
   
         if (this%fCrysPlasMat%GetStressDivergenceState(this%fTauResl, this%fTauCritNew)) then
           write(*, *) "Diverged tauResl/tauCrit detected!"
@@ -917,13 +1005,14 @@
 
 
     function CauchyStress(this, FElsNew) result(sigma)
-      use algebra, only : multQBQt, matDet
+      use algebra, only : multQBQt, matInv, matDet, UNITMAT
 
       class(CrysPlasMatPt), intent(in) :: this
       real(kind = RKIND),   intent(in) :: FElsNew(3, 3)
       real(kind = RKIND)               :: sigma(6)
 
-      real(kind = RKIND) :: elsGrn(3, 3)
+      real(kind = RKIND) :: FThNew(3, 3)
+      real(kind = RKIND) :: elsEGrn(3, 3)
       real(kind = RKIND) :: sigPK2(3, 3)
       real(kind = RKIND) :: sigCauchy(3, 3)
       real(kind = RKIND) :: det
@@ -931,8 +1020,13 @@
       integer(kind = IKIND) :: i, idxi(6), idxj(6)
 
 
-      elsGrn = this%GreenStrain(FElsNew)
-      sigPK2 = this%ElasticStress(elsGrn)
+      if (this%fIsTempDep) then
+        FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
+      else
+        FThNew  = UNITMAT
+      end if
+      elsEGrn   = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
+      sigPK2    = this%ElasticStress(elsEGrn)
       sigCauchy = multQBQt(sigPK2, FElsNew)
       det       = matDet(FElsNew)
       sigCauchy = sigCauchy/det
@@ -949,7 +1043,7 @@
       
 
     function GreenStrain(this, FF) result(epsGrn)
-      use utils, only : UNITMAT
+      use algebra, only : UNITMAT
 
       class(CrysPlasMatPt), intent(in) :: this
       real(kind = RKIND),   intent(in) :: FF(3, 3)

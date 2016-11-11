@@ -2,8 +2,8 @@ module typeThermoExpa
   use utils, only : RKIND, IKIND, LKIND
   implicit none
 
-  integer(kind = IKIND), public, parameter :: kIsoThExpa    = 1
-  integer(kind = IKIND), public, parameter :: kAnisoThExpa  = 2
+  integer(kind = IKIND), public, parameter :: kTEIso    = 1
+  integer(kind = IKIND), public, parameter :: kTEAniso  = 2
 
   type, abstract, public :: ThermoExpa
     real(kind = RKIND)  :: fTempRef
@@ -12,7 +12,7 @@ module typeThermoExpa
 
     logical(kind = LKIND) :: fIsCoefTempDep
   contains
-    procedure, public :: GetDefGrdTh
+    procedure, public :: DefGradTh
     procedure(UpdExpaCoefIntf), public, deferred :: UpdExpaCoef
   end type ThermoExpa
 
@@ -26,21 +26,21 @@ module typeThermoExpa
 
 contains
 
-  function GetDefGrdTh(this, tempCur) result(defGrdTh)
+  function DefGradTh(this, tempCur) result(FTh)
     class(ThermoExpa), intent(inout) :: this
     real(kind = RKIND), intent(in) :: tempCur
-    real(kind = RKIND) :: defGrdTh(3, 3)
+    real(kind = RKIND) :: FTh(3, 3)
 
     integer(kind = IKIND) :: i
 
-    defGrdTh = 0.0d0
+    FTh = 0.0d0
     if (this%fIsCoefTempDep) call this%UpdExpaCoef(tempCur)
 
     do i = 1, 3
-      defGrdTh(i, i) = 1 + this%fAlpha(i)*(tempCur - this%fTempRef)
+      FTh(i, i) = 1 + this%fAlpha(i)*(tempCur - this%fTempRef)
     end do
 
-  end function GetDefGrdTh
+  end function DefGradTh
 
 end module typeThermoExpa
 

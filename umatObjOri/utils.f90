@@ -6,20 +6,9 @@ module utils
   integer(kind = 4), parameter :: RKIND = 8
   integer(kind = 4), parameter :: LKIND = 1
   
-  real(kind = RKIND), parameter :: PI    = 3.1415926535897932d0
-  real(kind = RKIND), parameter :: SMALL = 1.0d-12
-
-  real(kind = RKIND), parameter :: UNITMAT(3, 3)        &
-      = reshape((/1.0d0, 0.0d0, 0.0d0,                  &
-                  0.0d0, 1.0d0, 0.0d0,                  &
-                  0.0d0, 0.0d0, 1.0d0/), (/3, 3/))
-
   character(len = *),    parameter :: CRYS_FILE_NAME   = "crystal.prop"
   integer(kind = IKIND), parameter :: CRYS_FILE_ID     = 74 
 
-
-  integer(kind = IKIND), parameter :: MAX_SLIP_SYSTEMS = 30
-  integer(kind = IKIND), parameter :: MAX_POLY_ORDER   = 5
 
   integer(kind = IKIND), parameter :: UPDSIG = 1
   integer(kind = IKIND), parameter :: UPDJAC = 2

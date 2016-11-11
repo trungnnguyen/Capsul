@@ -28,6 +28,8 @@
       ! universal service interface
       procedure, public  :: GetElasticModuli
 
+      procedure, public  :: GetThermalDeformationGradient     
+
       procedure, public  :: GetNumSlipSys 
       procedure, public  :: GetSchmidt
 
@@ -97,6 +99,17 @@
       end if
 
     end function GetElasticModuli
+
+
+
+    function GetThermalDeformationGradient(this, tempCur) result(FThNew)
+      class(CrysPlasMat),  intent(in) :: this
+      real(kind = RKIND),  intent(in) :: tempCur
+      real(kind = RKIND) :: FThNew(3, 3)
+
+      FThNew =  this%fThermoExpa%DefGradTh(tempCur)
+
+    end function GetThermalDeformationGradient
 
 
 
@@ -243,11 +256,11 @@
       call ReadLine(fID, line)
       read(line, *) crysElasCode, elasPropOrder 
       select case (crysElasCode)
-      case (kIso)
+      case (kCEIso)
         this%fCrysElas => CrysElasIso(  fID, this%fIsTempDep, elasPropOrder, this%fTempInit)
-      case (kCubic)
+      case (kCECubic)
         this%fCrysElas => CrysElasCubic(fID, this%fIsTempDep, elasPropOrder, this%fTempInit)
-      case (kAniso)
+      case (kCEAniso)
         this%fCrysElas => CrysElasAniso(fID, this%fIsTempDep, elasPropOrder, this%fTempInit)
       case default
         write(*, *) "Unknown Elasticity type ", crysElasCode, " in input file"
@@ -260,9 +273,9 @@
       call ReadLine(fID, line)
       read(line, *) thermoExpaCode, thermoExpaPropOrder, tempRef
       select case (thermoExpaCode) 
-      case (kIsoThExpa)
+      case (kTEIso)
         this%fThermoExpa => ThermoExpaIso(  fID, thermoExpaPropOrder, tempRef, this%fTempInit)
-      case (kAnisoThExpa)
+      case (kTEAniso)
         this%fThermoExpa => ThermoExpaAniso(fID, thermoExpaPropOrder, tempRef, this%fTempInit)
       case default
         write(*, *) "Unknown thermo expansion type ", thermoExpaCode, " in input file"
@@ -274,13 +287,13 @@
       call ReadLine(fID, line)
       read(line, *) slipGeomCode
       select case (slipGeomCode)
-      case (kFCC)
+      case (kSGFCC)
         this%fSlipGeom => SlipGeomFCC()
-      case (kBCC)
+      case (kSGBCC)
         this%fSlipGeom => SlipGeomBCC()
-      case (kHCP)
+      case (kSGHCP)
         this%fSlipGeom => SlipGeomHCP()
-      case (kUser)
+      case (kSGUser)
         this%fSlipGeom => SlipGeomUser(fID)
       case default
         write(*, *) "Unknown Geometry Type ", slipGeomCode, " in input file"
@@ -294,8 +307,10 @@
       call ReadLine(fID, line)
       read(line, *) slipKineCode
       select case (slipKineCode)
-      case (kPowLaw1)
+      case (kSKPowLaw1)
         this%fSlipKine => SlipKinePowLaw1(fID, this%fIsTempDep,  this%fNumSlipSys)
+      case (kSKFrostAshby)
+        this%fSlipKine => SlipKineFrostAshby(fID, this%fIsTempDep,  this%fNumSlipSys)
       case default
         write(*, *) "Unknown Slip Kinetics Type ", slipKineCode, " in input file"
         stop
@@ -310,12 +325,14 @@
       call ReadLine(fID, line)
       read(line, *) slipHardCode
       select case (slipHardCode)
-      case (kAssaNeed)
+      case (kSHAssaNeed)
         this%fSlipHard => SlipHardAN(fID, this%fIsTempDep, this%fNumSlipSys, nSlipSet, theSlipSet)
-      case (kVoceTome)
+      case (kSHVoceTome)
         this%fSlipHard => SlipHardVT(fID, this%fIsTempDep, this%fNumSlipSys, nSlipSet, theSlipSet)
-      case (kVoceKock)
+      case (kSHVoceKock)
         this%fSlipHard => SlipHardVK(fID, this%fIsTempDep, this%fNumSlipSys, nSlipSet, theSlipSet)
+      case (kSHFrostAshby)
+        this%fSlipHard => SlipHardFA(fID, this%fIsTempDep, this%fNumSlipSys, nSlipSet, theSlipSet)
       case default
         write(*, *) "Unknown Slip Hardening Type ", slipHardCode, " in input file"
         stop

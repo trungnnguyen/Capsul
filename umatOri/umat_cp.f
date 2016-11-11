@@ -506,6 +506,7 @@ c     5: CALCULATION OF RESIDUAL: RES=DFGRD_ELAS_PRED-DFGRD_ELAS
       BIGRES(8)=L_p(3,1)-L_p_new(3,1)
       BIGRES(9)=L_p(3,2)-L_p_new(3,2)
       
+      write(*, *) "LPlsNew = ", L_p
       do,isystem=1,nsystems
          BIGRES(9+isystem)=(dgamma(isystem)-dgamma_new(isystem))
 
@@ -1133,6 +1134,7 @@ c     5: CALCULATION OF RESIDUAL: RES=DFGRD_ELAS_PRED-DFGRD_ELAS
             BIGRES(8)=L_p(3,1)-L_p_new(3,1)
             BIGRES(9)=L_p(3,2)-L_p_new(3,2)
             
+            write(*, *) "LPlsNew = ", L_p
             do,isystem=1,nsystems
                BIGRES(9+isystem)=dgamma(isystem)-dgamma_new(isystem)
             enddo

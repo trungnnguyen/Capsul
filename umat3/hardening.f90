@@ -45,6 +45,8 @@
         call InitVTHardParas(fID, nSlipSets, systemSet)
       else if (hardType(1:8) == "vocekock") then
         call InitVKHardParas(fID, nSlipSets, systemSet)
+      else if (hardType(1:10) == "FrostAshby") then
+        call InitVKHardParas(fID, nSlipSets, systemSet)
       end if
 
     end subroutine InitHardParas
@@ -245,6 +247,8 @@
         fHH = fHHVT(gamma, gammaDot, temp)
       else if (hardType(1:8) == "vocekock") then
         fHH = fHHVK(gammaDot, tauCrit, temp)
+      !else if (hardType(1:10) == "frostashby")
+      !  fHH = fHHFA(gammaDot, tauCrit, temp)
       end if
 
     end function fHH

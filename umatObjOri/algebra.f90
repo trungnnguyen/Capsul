@@ -3,6 +3,14 @@
 
     implicit none
 
+    real(kind = RKIND), parameter :: UNITMAT(3, 3)        &
+        = reshape((/1.0d0, 0.0d0, 0.0d0,                  &
+                    0.0d0, 1.0d0, 0.0d0,                  &
+                    0.0d0, 0.0d0, 1.0d0/), (/3, 3/))
+
+
+    real(kind = RKIND), parameter :: PI = 3.1415926535897932d0
+
     contains
 
   
@@ -38,6 +46,43 @@
       end do
 
     end function polynomial
+
+
+    function interpolation(XData, YData, xx) result(yy)
+      real(kind = RKIND), intent(in) :: XData(:)
+      real(kind = RKIND), intent(in) :: YData(:)
+      real(kind = RKIND), intent(in) :: xx 
+      real(kind = RKIND) :: yy
+
+      integer(kind = IKIND) :: i1, i2, i, xLen, yLen
+
+      xLen = size(XData)
+      yLen = size(YData)
+      if (xLen /= yLen) then
+        write(*, *) "Error! XData and YData passed to interpolation function have different lengths!"
+        stop
+      end if
+
+      if (xx < XData(1)) then
+        i1 = 1
+        i2 = 2
+      else if (xx > xData(xLen)) then
+        i1 = xLen - 1
+        i2 = xLen 
+      else
+        do i = 1, xLen - 1
+          if (xx < XData(i+1) .and. xx > XData(i)) then
+            i1 = i
+            i2 = i + 1
+            exit
+          end if
+        end do
+      end if
+
+      yy = (YData(i2) - YData(i1))/(XData(i2) - XData(i1))*(xx - XData(i1)) + YData(i1)
+
+    end function interpolation
+
 
 
     !> Euclidean norm of the given vector
@@ -415,7 +460,6 @@
 
 
     subroutine polarDcmp(FF, RR, UU)
-      use utils, only : UNITMAT, PI
       
       real(kind = RKIND), intent(in)  :: FF(3, 3)
       real(kind = RKIND), intent(out) :: RR(3, 3)
@@ -510,12 +554,13 @@
 
 
     subroutine GaussJordan(A, S, ANS, iflag)
-      use utils, only : SMALL
 
       real(kind = RKIND),    intent(in)  :: A(:, :)
       real(kind = RKIND),    intent(in)  :: S(:)
       real(kind = RKIND),    intent(out) :: ANS(:)
       integer(kind = IKIND), intent(out) :: iflag
+
+      real(kind = RKIND), parameter :: kSmall = 1.0d-12
 
       real(kind = RKIND), allocatable :: B(:, :)
       real(kind = RKIND)     :: maxV
@@ -525,7 +570,7 @@
       
       iflag = 0
       maxV = maxval(dabs(A))
-      if (maxV < SMALL) then
+      if (maxV < kSmall) then
         iflag = 1
         return
       end if

@@ -401,7 +401,7 @@ contains
     if (this%fTauCritTCode == kConstTauCritT) then
       tauCritT = this%fTauCritT
     else if (this%fTauCritTCode == kVaryingTauCritT) then
-      tauCritT = tauCrit*(this%fYeta/(1.0d0 + this%fYeta))
+      tauCritT = tauCrit*(1.0d0 - 1.0d0/(1.0d0 + this%fYeta))
     end if
     tauCritAT = tauCrit - tauCritT 
     tauReslT  = dabs(tauResl) - tauCritAT 
@@ -415,7 +415,7 @@ contains
       else if (tauReslT(i) > 0 .and. tauReslT(i) < tauCritT(i)) then
         tmp1   = 1.0d0 - tauRatio(i)**this%fp
         y1     = -aux1*tmp1**this%fq
-        dfDy1  = this%fGammaDot0*exp(y1)  
+        dfDy1  = this%fGammaDot0*exp(y1)*sign(1.0d0, tauResl(i))  
         dy1Dy2 = aux2*(tmp1**(this%fq - 1.0d0))*(tauRatio(i)**(this%fp - 1.0d0))
         dy2dx  = 1.0d0/tauCritT(i) 
         dfdx   = dfdy1*dy1dy2*dy2dx
@@ -464,9 +464,9 @@ contains
       else if (tauReslT(i) > 0 .and. tauReslT(i) < tauCritT(i)) then
         tmp1   = 1.0d0 - tauRatio(i)**this%fp
         y1     = -aux1*tmp1**this%fq
-        dfDy1  = this%fGammaDot0*exp(y1)
+        dfDy1  = this%fGammaDot0*exp(y1)*sign(1.0d0, tauResl(i))
         dy1Dy2 = aux2*(tmp1**(this%fq - 1.0d0))*(tauRatio(i)**(this%fp - 1.0d0))
-        dy2dx  = -tauResl(i)/tauCritT(i)/tauCritT(i)
+        dy2dx  = -tauRatio(i)/tauCritT(i)
         dfdx   = dfdy1*dy1dy2*dy2dx
         dGammaDotDTauCrit(i) = dfdx
       else

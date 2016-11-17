@@ -1,2 +1,0 @@
-use typeSlipKine
-use typeSlipKinePowLaw1

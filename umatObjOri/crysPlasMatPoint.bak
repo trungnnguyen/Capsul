@@ -24,12 +24,12 @@
       real(kind = RKIND)    :: fTempNew  
       real(kind = RKIND)    :: fFtotNew(3, 3)  
 
-      real(kind = RKIND)    :: fFElsOld(3, 3)  
+      real(kind = RKIND)    :: fFRevOld(3, 3)  
       real(kind = RKIND)    :: fLPlsOld(3, 3)  
       real(kind = RKIND), allocatable :: fTauCritOld(:)  
       real(kind = RKIND), allocatable :: fGammaOld(:)  
 
-      real(kind = RKIND)    :: fFElsNew(3, 3)  
+      real(kind = RKIND)    :: fFRevNew(3, 3)  
       real(kind = RKIND)    :: fLPlsNew(3, 3)  
       real(kind = RKIND), allocatable :: fTauCritNew(:)  
       real(kind = RKIND), allocatable :: fGammaNew(:)  
@@ -68,10 +68,12 @@
       procedure, private :: UpdateStress
       procedure, private :: Pertubation
 
+      procedure, private :: CauchyStress
       procedure, private :: GreenStrain
       procedure, private :: ElasticStress
       procedure, private :: ResolvedSlipStress
       procedure, private :: VelocityGradientPlastic
+      procedure, private :: HeatGenerationRate
 
       procedure, private :: InitXX
       procedure, private :: FormLHS
@@ -133,12 +135,12 @@
       allocate(this%fGammaOld(this%fNumSlipSys))  
       allocate(this%fGammaNew(this%fNumSlipSys))  
   
-      this%fFElsOld    = UNITMAT
+      this%fFRevOld    = UNITMAT
       this%fLPlsOld    = 0.0d0
       this%fTauCritOld = this%fCrysPlasMat%GetInitialCRSS()
       this%fGammaOld   = 0.0d0
   
-      this%fFElsNew    = this%fFElsOld
+      this%fFRevNew    = this%fFRevOld
       this%fLPlsNew    = this%fLPlsOld
       this%fTauCritNew = this%fTauCritOld
       this%fGammaNew   = this%fGammaOld
@@ -239,7 +241,7 @@
       arrLen = 9
       idxLo = 1
       idxHi = idxLo + arrLen - 1
-      this%fFElsOld = reshape(statev(idxLo : idxHi), (/3, 3/))  
+      this%fFRevOld = reshape(statev(idxLo : idxHi), (/3, 3/))  
   
     
       arrLen = this%fNumSlipSys
@@ -283,7 +285,7 @@
       arrLen = 9
       idxLo = 1
       idxHi = idxLo + arrLen - 1
-      this%fFElsNew = reshape(statev(idxLo : idxHi), (/3, 3/))  
+      this%fFRevNew = reshape(statev(idxLo : idxHi), (/3, 3/))  
   
     
       arrLen = this%fNumSlipSys
@@ -326,7 +328,7 @@
       arrLen = 9
       idxLo = 1
       idxHi = idxLo + arrLen - 1
-      statev(idxLo : idxHi)   = reshape(this%fFElsNew, (/9/))
+      statev(idxLo : idxHi)   = reshape(this%fFRevNew, (/9/))
   
         
       arrLen = this%fNumSlipSys
@@ -530,7 +532,7 @@
       integer(kind = IKIND), intent(in) :: stage
 
       real(kind = RKIND), parameter :: kEpsIncPer  = 5.0d-5
-      real(kind = RKIND), parameter :: kTempIncPer = 1.0d-3
+      real(kind = RKIND), parameter :: kTempIncPer = 1.0d-4
 
       real(kind = RKIND) :: halfEpsInc
       real(kind = RKIND) :: FTotInc(3, 3)
@@ -548,7 +550,6 @@
       real(kind = RKIND) :: rplTempPerMinus
 
       real(kind = RKIND)    :: dGammaCvg(this%fNumSlipSys)
-      real(kind = RKIND)    :: dEpsDT(6)
       integer(kind = IKIND) :: idx1, idx2, idxi(6), idxj(6), iEpsPer
 
 
@@ -591,12 +592,7 @@
 
       end do
 
-
-      dEpsDt = (/-2.3d-5, -2.3d-5, -2.3d-5, 0.0d0, 0.0d0, 0.0d0/) 
-      this%fDSigDTemp = matmul(this%fDSigDEps, dEpsDT)
-      this%fDRplDTemp = sum(this%fDRplDEps*dEpsDT)
-
-
+      
       ! Pertubation of tempertature
       this%fDGamma = dGammaCvg
       tempPer = tempNew + kTempIncPer
@@ -617,6 +613,7 @@
         this%fDSigDTemp = (sigTempPerPlus - sigTempPerMinus)/(2.0*kTempIncPer)
         this%fDRplDTemp = (rplTempPerPlus - rplTempPerMinus)/(2.0*kTempIncPer)
       end if
+      
 
       this%fStress = sigCvg 
       this%fRpl    = RplCvg 
@@ -642,6 +639,7 @@
       Cijkl       = this%fCrysPlasMat%GetElasticModuli(this%fTempNew)
       this%fCijkl = ten4Rot(Cijkl, this%fRotMatx)
 
+      if (stage == kPertubation) return
       Schmidt     = this%fCrysPlasMat%GetSchmidt()
       do i = 1, this%fNumSlipSys
         this%fSchmidt(:, :, i) = multQBQt(Schmidt(:, :, i), this%fRotMatx)
@@ -700,6 +698,7 @@
       do while (iter <= nIters)
         call this%FormRHS(auxIter, RHS, pNewDt)
         normRHS = vecNorm(RHS)
+        write(*, *) "iter = ", iter, "stage = ", stage, "normRHS = ", normRHS
         if (normRHS <= iterTol) exit
         if (normRHS > kBigNorm .and. .not. processed) then
           call this%Correction(stage, auxIter, XX, pNewDt)
@@ -749,7 +748,7 @@
       real(kind = RKIND) :: sigCauchy(3, 3)
       real(kind = RKIND) :: FTotInc(3, 3)
       real(kind = RKIND) :: FThNew(3, 3)
-      real(kind = RKIND) :: FElsPrd(3, 3)
+      real(kind = RKIND) :: FElsNew(3, 3)
       real(kind = RKIND) :: det
 
       integer(kind = IKIND) :: i, idxi(6), idxj(6)
@@ -758,21 +757,22 @@
 
       if (this%fNewDt < 1.0d0) return
 
-      if (stage == kConvgIter) then
-        FTotInc  = matmul(this%fFTotNew, matInv(this%fFTotOld))
-        FElsPrd  = matmul(FTotInc, this%fFElsOld) 
-        this%fLPlsNew = (UNITMAT - matmul(matInv(FElsPrd), this%fFElsNew))/this%fDt
-      end if
+   !   if (stage == kConvgIter) then
+   !     FTotInc  = matmul(this%fFTotNew, matInv(this%fFTotOld))
+   !     FElsPrd  = matmul(FTotInc, this%fFRevOld) 
+   !     this%fLPlsNew = (UNITMAT - matmul(matInv(FElsPrd), this%fFRevNew))/this%fDt
+   !   end if
 
       if (this%fIsTempDep) then
         FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
       else
         FThNew  = UNITMAT
       end if
-      elsGrn    = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
+      FElsNew   = matmul(this%fFRevNew, matInv(FThNew))
+      elsGrn    = this%GreenStrain(FElsNew)
       sigPK2    = this%ElasticStress(elsGrn)
-      sigCauchy = multQBQt(sigPK2, matmul(this%fFElsNew, matInv(FThNew)))
-      det       = matDet(matmul(this%fFElsNew, matInv(FThNew)))
+      sigCauchy = multQBQt(sigPK2, this%fFRevNew)
+      det       = matDet(this%fFRevNew)
       sigCauchy = sigCauchy/det
 
       idxi = (/1, 2, 3, 1, 1, 2/)
@@ -784,7 +784,6 @@
       this%fTauResl  = this%ResolvedSlipStress(sigPK2)
       this%fGammaDot = this%fCrysPlasMat%GetSlipRate(this%fTauResl, this%fTauCritNew, this%fTempNew)
       this%fRpl      = disFrc*sum(dabs(this%fTauResl*this%fGammaDot))
-      
       
     end subroutine PostStep
       
@@ -801,6 +800,7 @@
 
       real(kind = RKIND) :: FTotInc(3, 3)
       real(kind = RKIND) :: FElsPrd(3, 3)
+      real(kind = RKIND) :: FElsNew(3, 3)
       real(kind = RKIND) :: FThNew(3, 3)
       real(kind = RKIND) :: elsEGrn(3, 3)
       real(kind = RKIND) :: sigPK2(3, 3)
@@ -809,14 +809,26 @@
 
 
       FTotInc  = matmul(this%fFTotNew, matInv(this%fFTotOld))
-      FElsPrd  = matmul(FTotInc, this%fFElsOld) 
+      FElsPrd  = matmul(FTotInc, this%fFRevOld) 
 
       if (stage == kConvgIter) then
-        this%fFElsNew = matmul(FElsPrd, UNITMAT - this%fLPlsOld*this%fDt)
+        this%fFRevNew = matmul(FElsPrd, UNITMAT - this%fLPlsOld*this%fDt)
       end if
 
+      if (this%fIsTempDep) then
+        FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
+      else
+        FThNew  = UNITMAT
+      end if
+      FElsNew        = matmul(this%fFRevNew, matInv(FThNew))
+      elsEGrn        = this%GreenStrain(FElsNew)
+      sigPK2         = this%ElasticStress(elsEGrn)
+      this%fTauResl  = this%ResolvedSlipStress(sigPK2)
+      this%fGammaDot = this%fCrysPlasMat%GetSlipRate(this%fTauResl, this%fTauCritOld, this%fTempNew)
+      this%fDGamma   = this%fGammaDot*this%fDt
+  
 
-      XX(1:  9) = reshape(this%fFElsNew, (/9/))
+      XX(1:  9) = reshape(this%fFRevNew, (/9/))
       XX(10: 9+this%fNumSlipSys) = this%fDGamma
 
      
@@ -841,6 +853,7 @@
       real(kind = RKIND)              :: pNewDt
   
       real(kind = RKIND) :: FThNew(3, 3)
+      real(kind = RKIND) :: FElsNew(3, 3)
       real(kind = RKIND) :: elsEGrn(3, 3)
       real(kind = RKIND) :: sigPK2(3, 3)
       real(kind = RKIND) :: LPlsCur(3, 3)
@@ -852,7 +865,8 @@
         FThNew  = UNITMAT
       end if
 
-      elsEGrn       = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
+      FElsNew       = matmul(this%fFRevNew, matInv(FThNew))
+      elsEGrn       = this%GreenStrain(FElsNew)
       sigPK2        = this%ElasticStress(elsEGrn)
       this%fTauResl = this%ResolvedSlipStress(sigPK2)
       if (this%fCrysPlasMat%GetStressDivergenceState(this%fTauResl, this%fTauCritNew)) then
@@ -868,7 +882,7 @@
 
 
       FElsPrdInv    = reshape(auxIter(1:9), (/3, 3/))
-      this%fLPlsNew = (UNITMAT - matmul(FElsPrdInv, this%fFElsNew))/this%fDt
+      this%fLPlsNew = (UNITMAT - matmul(FElsPrdInv, this%fFRevNew))/this%fDt
   
       RHS(1: 9)  = reshape(this%fLPlsNew - LPlsCur, (/9/))
       RHS(10: 9+this%fNumSlipSys) = this%fDGamma - this%fGammaDot*this%fDt
@@ -923,7 +937,7 @@
         do j = 1, 3
           do k = 1, 3
             do l = 1, 3
-              prtlStrain(i, j, k, l) = 0.5d0*(UNITMAT(i, l)*this%fFElsNew(k, j) + UNITMAT(j, l)*this%fFElsNew(k, i))
+              prtlStrain(i, j, k, l) = 0.5d0*(UNITMAT(i, l)*this%fFRevNew(k, j) + UNITMAT(j, l)*this%fFRevNew(k, i))
             end do
           end do
         end do
@@ -989,7 +1003,7 @@
   
       XX = XX - dX
   
-      this%fFElsNew  = reshape(XX(1:9), (/3, 3/))
+      this%fFRevNew  = reshape(XX(1:9), (/3, 3/))
       this%fDGamma   = XX(10: 9+this%fNumSlipSys)
 
       this%fGammaNew = this%fGammaOld + dabs(this%fDGamma)
@@ -998,7 +1012,7 @@
       this%fTauCritNew = this%fTauCritOld + dTauCrit
   
       FElsPrdInv    = reshape(auxIter(1:9), (/3, 3/))
-      this%fLPlsNew = (UNITMAT - matmul(FElsPrdInv, this%fFElsNew))/this%fDt
+      this%fLPlsNew = (UNITMAT - matmul(FElsPrdInv, this%fFRevNew))/this%fDt
 
     end subroutine UpdateXX
   
@@ -1020,14 +1034,14 @@
       real(kind = RKIND) :: tauCritDot(this%fNumSlipSys)
   
  
-      this%fFElsNew =  reshape(auxIter(10:18), (/3, 3/))
+      this%fFRevNew =  reshape(auxIter(10:18), (/3, 3/))
       if (stage == kConvgIter) then
         if (this%fIsTempDep) then
           FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
         else
           FThNew  = UNITMAT
         end if
-        elsEGrn       = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
+        elsEGrn       = this%GreenStrain(matmul(this%fFRevNew, matInv(FThNew)))
         sigPK2        = this%ElasticStress(elsEGrn)
         this%fTauResl = this%ResolvedSlipStress(sigPK2)
   
@@ -1050,13 +1064,51 @@
         this%fTauCritNew = this%fTauCritOld
       end if
 
-      XX(1:  9) = reshape(this%fFElsNew, (/9/))
+      XX(1:  9) = reshape(this%fFRevNew, (/9/))
       XX(10: 9+this%fNumSlipSys) = this%fDGamma
 
     end subroutine Correction
 
 
 
+
+    function CauchyStress(this, FElsNew) result(sigma)
+      use algebra, only : multQBQt, matInv, matDet, UNITMAT
+
+      class(CrysPlasMatPt), intent(in) :: this
+      real(kind = RKIND),   intent(in) :: FElsNew(3, 3)
+      real(kind = RKIND)               :: sigma(6)
+
+      real(kind = RKIND) :: FThNew(3, 3)
+      real(kind = RKIND) :: elsEGrn(3, 3)
+      real(kind = RKIND) :: sigPK2(3, 3)
+      real(kind = RKIND) :: sigCauchy(3, 3)
+      real(kind = RKIND) :: det
+
+      integer(kind = IKIND) :: i, idxi(6), idxj(6)
+
+
+      if (this%fIsTempDep) then
+        FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
+      else
+        FThNew  = UNITMAT
+      end if
+      elsEGrn   = this%GreenStrain(matmul(this%fFRevNew, matInv(FThNew)))
+      sigPK2    = this%ElasticStress(elsEGrn)
+      sigCauchy = multQBQt(sigPK2, FElsNew)
+      det       = matDet(FElsNew)
+      sigCauchy = sigCauchy/det
+
+      idxi = (/1, 2, 3, 1, 1, 2/)
+      idxj = (/1, 2, 3, 2, 3, 3/)
+      do i = 1, 6
+        sigma(i) = sigCauchy(idxi(i), idxj(i))
+      end do
+
+    end function CauchyStress
+
+
+      
 
     function GreenStrain(this, FF) result(epsGrn)
       use algebra, only : UNITMAT
@@ -1118,6 +1170,25 @@
       end do
 
     end function VelocityGradientPlastic
+
+
+
+
+    function HeatGenerationRate(this, gammaDot, tauResl) result(RPL)
+      class(CrysPlasMatPt), intent(in) :: this
+      real(kind = RKIND),   intent(in) :: gammaDot(this%fNumSlipSys)
+      real(kind = RKIND),   intent(in) :: tauResl(this%fNumSlipSys)
+      real(kind = RKIND)               :: RPL
+
+      integer(kind = IKIND) :: i
+
+      RPL = 0.0d0
+      do i = 1, this%fNumSlipSys
+        RPL = RPL + gammaDot(i)*tauResl(i)
+      end do
+
+    end function HeatGenerationRate
+
 
       
   end module typeCrysPlasMatPt

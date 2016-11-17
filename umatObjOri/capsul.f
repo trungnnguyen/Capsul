@@ -12,7 +12,6 @@
 
     !> Explicit Declaration of interface arguments called by ABAQUS
     include 'umatArgs.inc'
-    !class(CrysPlasMatPt), pointer :: theCrysPlasMatPt 
     type(CrysPlasMatPt)   :: theCrysPlasMatPt 
     real(kind = RKIND)    :: oriArray(6)
     integer(kind = IKIND) :: ansyType 
@@ -31,10 +30,21 @@
     call theCrysPlasMatPt%AdvanceStep(dfGrd0, dfGrd1, temp, temp+dtemp, statev, nstatv, dtime)
 
     stress = theCrysPlasMatPt%GetCauchyStress()
-    ddsdde = theCrysPlasMatPt%GetJacob()
+    ddsdde = theCrysPlasMatPt%GetMaterialJacob()
     pNewdt = theCrysPlasMatPt%GetNewDtScaleFactor()
-    if (ansyType == 1) rpl = theCrysPlasMatPt%GetHeatGenRate()
-
+    if (ansyType == 1) then
+      ddsddt = theCrysPlasMatPt%GetDSigDTemp()
+      rpl    = theCrysPlasMatPt%GetHeatGenRate()
+      dRplDT = theCrysPlasMatPt%GetDRplDTemp()
+      dRplDE = theCrysPlasMatPt%GetDRplDEps()
+    end if
+   
+!    write(*, *)  "stress = ", stress
+!    write(*, *)  "ddsdde = ", ddsdde
+!    write(*, *)  "ddsddt = ", ddsddt
+!    write(*, *)  "rpl    = ", rpl
+!    write(*, *)  "dRplDt = ", drpldt
+!    write(*, *)  "dRplDe = ", drplde
     call theCrysPlasMatPt%SaveStateVar(statev, nstatv)
 
     eqvSig = 1.0d0/sqrt(2.0)*sqrt((stress(1)-stress(2))*(stress(1)-stress(2)) + (stress(2)-stress(3))*(stress(2)-stress(3)) &
@@ -44,9 +54,8 @@
     eqvEps = sqrt(2.0)/3.0d0*sqrt((stran(1)-stran(2))*(stran(1)-stran(2)) + (stran(2)-stran(3))*(stran(2)-stran(3)) &
                                +(stran(3)-stran(1))*(stran(3)-stran(1)) + 6.0d0*(stran(4)*stran(4) + stran(5)*stran(5) &
                                                                                     +stran(6)*stran(6)))
-    if (npt == 1) then
-      write(*, *) KINC, time(2), eqvSig, eqvEps, temp
+    if (npt == 1) then                                                                            
+      write(*, *) KINC, NPT, time(2), pnewDt, eqvSig, eqvEps, rpl, temp
     end if
-
   end subroutine umat
 

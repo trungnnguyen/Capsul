@@ -164,6 +164,7 @@ contains
     tauRatio = tauResl/tauCrit
     absTauRatio = abs(tauRatio)
 
+
     aux1 = factor*this%fGammaDot0
     aux2 = 1.0d0/this%fXm - 1.0d0
     tauSign = sign(1.0d0, tauRatio)

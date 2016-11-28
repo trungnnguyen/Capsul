@@ -122,6 +122,7 @@
         TauCritRate(i) = dot_product(hh(i, :), absGammaDot)
       end do
   
+
     end function TauCritRate
   
 
@@ -587,6 +588,7 @@
   
     type, extends(SlipHard), public :: SlipHardFA
       logical(KIND = LKIND) :: fTempDepSaturCRSS
+      logical(KIND = LKIND) :: fConstThCRSS
       real(kind = RKIND), allocatable :: fSaturCRSS(:, :)
     contains
       procedure, public  :: InitialCRSS
@@ -613,7 +615,7 @@
       integer(kind = IKIND), intent(in) :: slipSet(numSlipSys)
       type(SlipHardFA), pointer         :: this
   
-      integer(kind = IKIND), parameter :: kNumMatProp = 4
+      integer(kind = IKIND), parameter :: kNumMatProp = 5
       integer(kind = IKIND), parameter :: kNumMatAux  = 0
       real(kind = RKIND) :: auxMatProp(numSlipSet, kNumMatProp+kNumMatAux)
       real(kind = RKIND) :: auxQab(numSlipSet, numSlipSet)
@@ -650,13 +652,18 @@
   
       ! Read material properties for hardening in each slip set
       this%fTempDepSaturCRSS = .false.
+      this%fConstThCRSS      = .false.
       maxDataItemSaturCRSS   = 0
       do i = 1, numSlipSet
         call ReadLine(fID, line)
         read(line, *) (auxMatProp(i, j), j = 1, kNumMatProp)
-        if (auxMatProp(i, 4) < 0.0d0) then
+        if (auxMatProp(i, 1) < 0.0d0) then
+          this%fConstThCRSS = .true.
+          auxMatProp(i, 1) = -auxMatProp(i, 1)
+        end if
+        if (auxMatProp(i, 5) < 0.0d0) then
           this%fTempDepSaturCRSS = .true.
-          maxDataItemSaturCRSS   = max(maxDataItemSaturCRSS, nint(-auxMatProp(i, 4)))
+          maxDataItemSaturCRSS   = max(maxDataItemSaturCRSS, nint(-auxMatProp(i, 5)))
         end if
       end do
   
@@ -705,7 +712,7 @@
       class(SlipHardFA),  intent(in) :: this
       real(kind = RKIND) :: tauCrit0(this%fNumSlipSys)
 
-      tauCrit0 = this%fMatProp(:, 1)
+      tauCrit0 = this%fMatProp(:, 1) + this%fMatProp(:, 2)
 
     end function InitialCRSS
 
@@ -720,6 +727,8 @@
 
       real(kind = RKIND) :: HardMatrix(this%fNumSlipSys, this%fNumSlipSys)
 
+      real(kind = RKIND) :: tauCritT0(this%fNumSlipSys)
+      real(kind = RKIND) :: tauCritAT(this%fNumSlipSys)
       real(kind = RKIND) :: h0(this%fNumSlipSys)
       real(kind = RKIND) :: r1(this%fNumSlipSys)
       real(kind = RKIND) :: tauSatur(this%fNumSlipSys)
@@ -728,15 +737,24 @@
       integer(kind = IKIND) :: ii, jj
 
 
-      h0  = this%fMatProp(:, 2)
-      r1  = this%fMatProp(:, 3)
+      tauCritT0  = this%fMatProp(:, 1)
+      h0         = this%fMatProp(:, 3)
+      r1         = this%fMatProp(:, 4)
+
+      
+      if (this%fConstThCRSS) then
+        tauCritAT = tauCrit - tauCritT0
+      else
+        tauCritAT = tauCrit
+      end if
+
       if (this%fTempDepSaturCRSS) then
          tauSatur = this%CurSaturCRSS(temp)
       else
-         tauSatur = this%fMatProp(:, 4)
+         tauSatur = this%fMatProp(:, 5)
       end if
 
-      aux1 = 1.0d0 - tauCrit/tauSatur
+      aux1 = 1.0d0 - tauCritAT/tauSatur
       aux2 = h0*(abs(aux1)**r1)*sign(1.0d0, aux1)
       do ii = 1, this%fNumSlipSys
         do jj = 1, this%fNumSlipSys

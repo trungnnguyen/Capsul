@@ -387,7 +387,6 @@
       integer(kind = IKIND) :: stage
 
 
-
       stage     = kConvgIter
       statevOld = statev
       statevNew = statev
@@ -592,34 +591,34 @@
       end do
 
 
-      dEpsDt = (/-2.3d-5, -2.3d-5, -2.3d-5, 0.0d0, 0.0d0, 0.0d0/) 
-      this%fDSigDTemp = matmul(this%fDSigDEps, dEpsDT)
-      this%fDRplDTemp = sum(this%fDRplDEps*dEpsDT)
+   !   dEpsDt = (/-2.3d-5, -2.3d-5, -2.3d-5, 0.0d0, 0.0d0, 0.0d0/) 
+   !   this%fDSigDTemp = matmul(this%fDSigDEps, dEpsDT)
+   !   this%fDRplDTemp = sum(this%fDRplDEps*dEpsDT)
 
 
-      ! Pertubation of tempertature
-      this%fDGamma = dGammaCvg
-      tempPer = tempNew + kTempIncPer
-      call this%UpdateStress(FTotOld, FTotNew, tempOld, tempPer, statevOld, statevNew, nstatv, dtime, stage)
-      sigTempPerPlus = this%fStress
-      rplTempPerPlus = this%fRpl
+   !   ! Pertubation of tempertature
+   !   this%fDGamma = dGammaCvg
+   !   tempPer = tempNew + kTempIncPer
+   !   call this%UpdateStress(FTotOld, FTotNew, tempOld, tempPer, statevOld, statevNew, nstatv, dtime, stage)
+   !   sigTempPerPlus = this%fStress
+   !   rplTempPerPlus = this%fRpl
 
-      this%fDGamma = dGammaCvg
-      tempPer = tempNew - kTempIncPer
-      call this%UpdateStress(FTotOld, FTotNew, tempOld, tempPer, statevOld, statevNew, nstatv, dtime, stage)
-      sigTempPerMinus = this%fStress
-      rplTempPerMinus = this%fRpl
+   !   this%fDGamma = dGammaCvg
+   !   tempPer = tempNew - kTempIncPer
+   !   call this%UpdateStress(FTotOld, FTotNew, tempOld, tempPer, statevOld, statevNew, nstatv, dtime, stage)
+   !   sigTempPerMinus = this%fStress
+   !   rplTempPerMinus = this%fRpl
 
-      if (this%fNewDt < 1.0d0) then
-        this%fDSigDTemp = 0.0d0
-        this%fDRplDTemp = 0.0d0
-      else
-        this%fDSigDTemp = (sigTempPerPlus - sigTempPerMinus)/(2.0*kTempIncPer)
-        this%fDRplDTemp = (rplTempPerPlus - rplTempPerMinus)/(2.0*kTempIncPer)
-      end if
+   !   if (this%fNewDt < 1.0d0) then
+   !     this%fDSigDTemp = 0.0d0
+   !     this%fDRplDTemp = 0.0d0
+   !   else
+   !     this%fDSigDTemp = (sigTempPerPlus - sigTempPerMinus)/(2.0*kTempIncPer)
+   !     this%fDRplDTemp = (rplTempPerPlus - rplTempPerMinus)/(2.0*kTempIncPer)
+   !   end if
 
-      this%fStress = sigCvg 
-      this%fRpl    = RplCvg 
+   !   this%fStress = sigCvg 
+   !   this%fRpl    = RplCvg 
 
     end subroutine Pertubation
 
@@ -700,6 +699,7 @@
       do while (iter <= nIters)
         call this%FormRHS(auxIter, RHS, pNewDt)
         normRHS = vecNorm(RHS)
+    !    write(*, *) "stage = ", stage, "iter = ", iter, "normRHS = ", normRHS
         if (normRHS <= iterTol) exit
         if (normRHS > kBigNorm .and. .not. processed) then
           call this%Correction(stage, auxIter, XX, pNewDt)
@@ -771,8 +771,8 @@
       end if
       elsGrn    = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
       sigPK2    = this%ElasticStress(elsGrn)
-      sigCauchy = multQBQt(sigPK2, matmul(this%fFElsNew, matInv(FThNew)))
-      det       = matDet(matmul(this%fFElsNew, matInv(FThNew)))
+      sigCauchy = multQBQt(sigPK2, this%fFElsNew)
+      det       = matDet(this%fFElsNew)
       sigCauchy = sigCauchy/det
 
       idxi = (/1, 2, 3, 1, 1, 2/)
@@ -829,7 +829,6 @@
     end subroutine InitXX
 
    
-      
 
     ! Calculate the residual (right hand section(RHS) of the equation) in each N-R iteration  
     subroutine FormRHS(this, auxIter, RHS, pNewDt)
@@ -861,21 +860,21 @@
         return
       end if
 
-     ! write(*, *) "tauResl = ", this%fTauResl
-     ! write(*, *) "tauCrit = ", this%fTauCritNew
+   !   write(*, *) "FElsNew =  ", this%fFElsNew
+   !   write(*, *) "elsEGrn =  ", elsEGrn
+   !   write(*, *) "sigPK2  =  ", sigPK2
+   !   write(*, *) "tauCrit =  ", this%fTauCritNew(1)
       this%fGammaDot = this%fCrysPlasMat%GetSlipRate(this%fTauResl, this%fTauCritNew, this%fTempNew)
       LPlsCur  = this%VelocityGradientPlastic(this%fGammaDot)
 
 
       FElsPrdInv    = reshape(auxIter(1:9), (/3, 3/))
-      this%fLPlsNew = (UNITMAT - matmul(FElsPrdInv, this%fFElsNew))/this%fDt
+      !this%fLPlsNew = (UNITMAT - matmul(FElsPrdInv, this%fFElsNew))/this%fDt
+      this%fLPlsNew = UNITMAT - matmul(FElsPrdInv, this%fFElsNew)
   
-      RHS(1: 9)  = reshape(this%fLPlsNew - LPlsCur, (/9/))
+      RHS(1: 9)  = reshape(this%fLPlsNew - LPlsCur*this%fDt, (/9/))
       RHS(10: 9+this%fNumSlipSys) = this%fDGamma - this%fGammaDot*this%fDt
      
-     ! write(*, *) "RHS(1:9) = ", RHS(1:9)
-     ! write(*, *) "RHS(10:) = ", RHS(10:9+this%fNumSlipSys)
-     ! write(*, *) "gammaDot = ", this%fGammaDot
 
     end subroutine FormRHS
 
@@ -887,9 +886,11 @@
       class(CrysPlasMatPt) :: this
       real(kind = RKIND), intent(in) :: auxIter(18)
       real(kind = RKIND) :: LHS(9+this%fNumSlipSys, 9+this%fNumSlipSys)
+
+      real(kind = RKIND) :: FThNew(3, 3)
   
-      real(kind = RKIND) :: prtlStrain(3, 3, 3, 3)
-      real(kind = RKIND) :: prtlTauResl(3, 3, this%fNumSlipSys)
+      real(kind = RKIND) :: dEdFe(3, 3, 3, 3)
+      real(kind = RKIND) :: dGammaDotDFe(3, 3, this%fNumSlipSys)
   
       real(kind = RKIND) :: dGammaDotDTauResl(this%fNumSlipSys)
       real(kind = RKIND) :: dGammaDotDTauCrit(this%fNumSlipSys)
@@ -905,6 +906,12 @@
   
       nSlipSys = this%fNumSlipSys
   
+      if (this%fIsTempDep) then
+        FThNew  = this%fCrysPlasMat%GetThermalDeformationGradient(this%fTempNew)
+      else
+        FThNew  = UNITMAT
+      end if
+
       dGammaDotDTauResl = this%fCrysPlasMat%GetDSlipRateDTauResl(this%fTauResl, this%fTauCritNew, this%fTempNew)
       dGammaDotDTauCrit = this%fCrysPlasMat%GetDSlipRateDTauCrit(this%fTauResl, this%fTauCritNew, this%fTempNew)
       !BOX11: partial Lp / partial Fe
@@ -912,7 +919,9 @@
       FElsPrdInv = reshape(auxIter(1:9), (/3, 3/))
       do i = 1, 3
         do j = 1, 3
-          aux1 = -FElsPrdInv(i, j)/this%fDt
+         ! aux1 = -FElsPrdInv(i, j)/this%fDt
+          aux1 = -FElsPrdInv(i, j)
+          
           auxTen4th1(i, 1, j, 1) = aux1
           auxTen4th1(i, 2, j, 2) = aux1
           auxTen4th1(i, 3, j, 3) = aux1
@@ -923,44 +932,47 @@
         do j = 1, 3
           do k = 1, 3
             do l = 1, 3
-              prtlStrain(i, j, k, l) = 0.5d0*(UNITMAT(i, l)*this%fFElsNew(k, j) + UNITMAT(j, l)*this%fFElsNew(k, i))
+              dEdFe(i, j, k, l) = 0.5d0*(UNITMAT(i, l)*this%fFElsNew(k, j) + UNITMAT(j, l)*this%fFElsNew(k, i))
             end do
           end do
         end do
       end do
   
-      auxTen4th2 = MultAijmnBmnkl(this%fCijkl, prtlStrain) 
+      auxTen4th2 = MultAijmnBmnkl(this%fCijkl, dEdFe) 
       auxTen4th3 = 0.0d0
       do i = 1, nSlipSys
         do j = 1, 3
           do k = 1, 3
-            prtlTauResl(j, k, i) = dGammaDotDTauResl(i) * sum(this%fSchmidt(:, :, i)*auxTen4th2(:, :, j, k))
+            dGammaDotDFe(j, k, i) = dGammaDotDTauResl(i) * sum(this%fSchmidt(:, :, i)*auxTen4th2(:, :, j, k))
           end do
         end do
-        auxTen4th3 = auxTen4th3 + tenmul(this%fSchmidt(:, :, i), prtlTauResl(:, :, i))
+        !auxTen4th3 = auxTen4th3 + tenmul(this%fSchmidt(:, :, i), dGammaDotDFe(:, :, i))
+        auxTen4th3 = auxTen4th3 + this%fDt*tenmul(this%fSchmidt(:, :, i), dGammaDotDFe(:, :, i))
       end do
     
-      LHS(1:9, 1:9) = Ten3333ToA99(auxTen4th1 - auxTen4th3)
+       LHS(1:9, 1:9) = Ten3333ToA99(auxTen4th1 - auxTen4th3)
   
       !BOX12: Partial Lp/ partial dgamma
       dTauCritDGamma = this%fCrysPlasMat%GetDTauCritDGamma(this%fGammaNew, this%fGammaDot, this%fTauCritNew, this%fTempNew)
       do i = 1, nSlipSys
         do j = 1, nSlipSys
-          dTauCritAux(i, j) = dGammaDotDTauCrit(i)*dTauCritDGamma(i, j)
+        !  dTauCritAux(i, j) = dGammaDotDTauCrit(i)*dTauCritDGamma(i, j)
+          dTauCritAux(i, j) = -dGammaDotDTauCrit(i)*dTauCritDGamma(i, j)
         end do
       end do
   
       do i = 1, nSlipSys
         auxMatx = 0.0d0
         do j = 1, nSlipSys
-          auxMatx = auxMatx + this%fSchmidt(:, :, j)*dTauCritAux(j, i)
+          !auxMatx = auxMatx + this%fSchmidt(:, :, j)*dTauCritAux(j, i)
+          auxMatx = auxMatx + this%fDt*this%fSchmidt(:, :, j)*dTauCritAux(j, i)
         end do
         LHS(1:9, 9+i) = reshape(auxMatx, (/9/))
       end do
   
       !BOX21: Partial dgamma / partial Fe
       do i = 1, nSlipSys
-        LHS(9+i, 1:9) = reshape(-this%fDt*prtlTauResl(:, :, i), (/9/))
+        LHS(9+i, 1:9) = reshape(-this%fDt*dGammaDotDFe(:, :, i), (/9/))
       end do
   
       ! BOX22: Partial dgamma/dgamma

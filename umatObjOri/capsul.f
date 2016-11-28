@@ -55,7 +55,8 @@
                                +(stran(3)-stran(1))*(stran(3)-stran(1)) + 6.0d0*(stran(4)*stran(4) + stran(5)*stran(5) &
                                                                                     +stran(6)*stran(6)))
     if (npt == 1) then                                                                            
-      write(*, *) KINC, NPT, time(2), pnewDt, eqvSig, eqvEps, rpl, temp
+      write(*, *) "KINC = ", KINC, NPT, time(2), pnewDt, eqvSig, eqvEps, rpl, temp
     end if
+
   end subroutine umat
 

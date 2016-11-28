@@ -240,9 +240,37 @@ contains
 
   end subroutine Destructor
 
+
   subroutine SetSlipVectors(this)
     class(SlipGeomBCC) :: this
 
+    this%fSlipVecS(:,  1) = (/0,   1,   1/)
+    this%fSlipVecS(:,  2) = (/1,   0,   1/)
+    this%fSlipVecS(:,  3) = (/1,  -1,   0/)
+    this%fSlipVecS(:,  4) = (/0,   1,  -1/)
+    this%fSlipVecS(:,  5) = (/1,   0,   1/)
+    this%fSlipVecS(:,  6) = (/1,   1,   0/)
+    this%fSlipVecS(:,  7) = (/0,   1,   1/)
+    this%fSlipVecS(:,  8) = (/1,   0,  -1/)
+    this%fSlipVecS(:,  9) = (/1,   1,   0/)
+    this%fSlipVecS(:, 10) = (/1,  -1,   0/)
+    this%fSlipVecS(:, 11) = (/1,   0,  -1/)
+    this%fSlipVecS(:, 12) = (/0,   1,  -1/)
+
+    this%fSlipVecM(:,  1) = (/1,   1,  -1/)
+    this%fSlipVecM(:,  2) = (/1,   1,  -1/)
+    this%fSlipVecM(:,  3) = (/1,   1,  -1/)
+    this%fSlipVecM(:,  4) = (/1,  -1,  -1/)
+    this%fSlipVecM(:,  5) = (/1,  -1,  -1/)
+    this%fSlipVecM(:,  6) = (/1,  -1,  -1/)
+    this%fSlipVecM(:,  7) = (/1,  -1,   1/)
+    this%fSlipVecM(:,  8) = (/1,  -1,   1/)
+    this%fSlipVecM(:,  9) = (/1,  -1,   1/)
+    this%fSlipVecM(:, 10) = (/1,   1,   1/)
+    this%fSlipVecM(:, 11) = (/1,   1,   1/)
+    this%fSlipVecM(:, 12) = (/1,   1,   1/)
+
+    this%fSlipSet    = 1
 
   end subroutine
 
@@ -292,6 +320,8 @@ contains
   subroutine SetSlipVectors(this)
     class(SlipGeomHCP) :: this
 
+
+    write(*, *) "SetSlipVectors for HCP not implemented yet!"
 
   end subroutine
 

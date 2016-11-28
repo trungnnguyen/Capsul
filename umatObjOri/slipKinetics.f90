@@ -318,7 +318,8 @@ contains
        this%fTauCritT = tmpVar
        this%fYeta     = -1.0d0   ! fYeta is not used in this case
     else if (this%fTauCritTCode == kVaryingTauCritT) then
-       this%fYeta     = tmpVar
+    ! this%fYeta is actually yeta/(1.0+yeta)
+       this%fYeta     = tmpVar/(1.0d0 + tmpVar)
        this%fTauCritT = 0.0d0
     else
       write(*, *) "Error! Unknown code for the constantness of thermal part of TauCrit"
@@ -351,7 +352,7 @@ contains
     real(kind = RKIND) :: tauSign(this%fNumSlipSys)
     real(kind = RKIND) :: tauRatio(this%fNumSlipSys)
     real(kind = RKIND) :: dltG
-
+    real(kind = RKIND) :: aux1
     integer(kind = IKIND) :: i
 
 
@@ -359,7 +360,8 @@ contains
     if (this%fTauCritTCode == kConstTauCritT) then
       tauCritT = this%fTauCritT
     else if (this%fTauCritTCode == kVaryingTauCritT) then
-      tauCritT = tauCrit*(this%fYeta/(1.0d0 + this%fYeta))
+      !tauCritT = tauCrit*(this%fYeta/(1.0d0 + this%fYeta))
+      tauCritT = tauCrit*this%fYeta
     end if
     tauCritAT = tauCrit - tauCritT 
     tauReslT  = dabs(tauResl) - tauCritAT 
@@ -367,12 +369,13 @@ contains
 
     tauSign = sign(1.0d0, tauResl)
 
+    aux1 = this%fKb*temp
     do i = 1, this%fNumSlipSys
       if (tauReslT(i) <= 0.0d0) then
         gammaDot(i) = 0.0d0
       else if (tauReslT(i) > 0.0d0 .and. tauReslT(i) < tauCritT(i)) then
         dltG = this%fEAct*(1.0d0 - tauRatio(i)**this%fp)**this%fq
-        gammaDot(i) = this%fGammaDot0*exp(-dltG/(this%fKb*temp))*tauSign(i)
+        gammaDot(i) = this%fGammaDot0*exp(-dltG/aux1)*tauSign(i)
       else
         write(*, *) "Error in SlipKineFrostAshby::SlipRate"
         stop
@@ -396,13 +399,14 @@ contains
     real(kind = RKIND) :: tauReslT(this%fNumSlipSys)
     real(kind = RKIND) :: tauRatio(this%fNumSlipSys)
 
-    real(kind = RKIND) :: aux1, aux2, tmp1, y1, dfdy1, dy1dy2, dy2dx, dfdx
+    real(kind = RKIND) :: aux1, aux2, aux3, aux4, aux5, y1, dfdy1, dy1dy2, dy2dx, dfdx
     integer(kind = IKIND) :: i
 
     if (this%fTauCritTCode == kConstTauCritT) then
       tauCritT = this%fTauCritT
     else if (this%fTauCritTCode == kVaryingTauCritT) then
-      tauCritT = tauCrit*(this%fYeta/(1.0d0 + this%fYeta))
+    ! this%fYeta is actually yeta/(1.0+yeta)
+      tauCritT = tauCrit*this%fYeta
     end if
     tauCritAT = tauCrit - tauCritT 
     tauReslT  = dabs(tauResl) - tauCritAT 
@@ -414,15 +418,17 @@ contains
       if (tauReslT(i) <= 0.0d0) then
         dGammaDotDTauResl(i) = 0.0d0
       else if (tauReslT(i) > 0 .and. tauReslT(i) < tauCritT(i)) then
-        tmp1   = 1.0d0 - tauRatio(i)**this%fp
-        y1     = -aux1*tmp1**this%fq
-        dfDy1  = this%fGammaDot0*exp(y1)  
-        dy1Dy2 = aux2*(tmp1**(this%fq - 1.0d0))*(tauRatio(i)**(this%fp - 1.0d0))
+        aux3   = tauRatio(i)**(this%fp - 1.0d0)
+        aux4   = 1.0d0 - aux3*tauRatio(i)
+        aux5   = aux4**(this%fq - 1.0d0)
+        y1     = -aux1*aux5*aux4
+        dfDy1  = this%fGammaDot0*exp(y1)
+        dy1Dy2 = aux2*aux5*aux3
         dy2dx  = 1.0d0/tauCritT(i) 
         dfdx   = dfdy1*dy1dy2*dy2dx
         dGammaDotDTauResl(i) = dfdx
       else
-        write(*, *) "Error in SlipKineFrostAshby::SlipRate"
+        write(*, *) "Error in SlipKineFrostAshby::DSlipRateDTauResl"
         stop
       end if
     end do
@@ -444,13 +450,16 @@ contains
     real(kind = RKIND) :: tauReslT(this%fNumSlipSys)
     real(kind = RKIND) :: tauRatio(this%fNumSlipSys)
 
-    real(kind = RKIND) :: aux1, aux2, aux3, tmp1, y1, dfdy1, dy1dy2, dy2dx, dfdx
+    real(kind = RKIND) :: aux1, aux2, aux3, aux4, aux5, y1, dfdy1, dy1dy2, dy2dx, dfdx
     integer(kind = IKIND) :: i
 
     if (this%fTauCritTCode == kConstTauCritT) then
       tauCritT = this%fTauCritT
+      dGammaDotDTauCrit = 0
+      return
     else if (this%fTauCritTCode == kVaryingTauCritT) then
-      tauCritT = tauCrit*(this%fYeta/(1.0d0 + this%fYeta))
+    ! this%fYeta is actually yeta/(1.0+yeta)
+      tauCritT = tauCrit*this%fYeta
     end if
     tauCritAT = tauCrit - tauCritT 
     tauReslT  = dabs(tauResl) - tauCritAT 
@@ -458,28 +467,28 @@ contains
 
     aux1 = this%fEAct/(this%fKb*temp)
     aux2 = aux1*this%fp*this%fq
-    aux3 = this%fYeta/(1.0d0 + this%fYeta)
     do i = 1, this%fNumSlipSys
       if (tauReslT(i) <= 0.0d0) then
         dGammaDotDTauCrit(i) = 0.0d0
       else if (tauReslT(i) > 0 .and. tauReslT(i) < tauCritT(i)) then
-        tmp1   = 1.0d0 - tauRatio(i)**this%fp
-        y1     = -aux1*tmp1**this%fq
-        dfDy1  = this%fGammaDot0*exp(y1)
-        dy1Dy2 = aux2*(tmp1**(this%fq - 1.0d0))*(tauRatio(i)**(this%fp - 1.0d0))
-        dy2dx  = -tauResl(i)/tauCritT(i)/tauCritT(i)
-        dfdx   = dfdy1*dy1dy2*dy2dx
-        dGammaDotDTauCrit(i) = dfdx
+        aux3   = tauRatio(i)**(this%fp - 1.0d0)
+        aux4   = 1.0d0 - aux3*tauRatio(i)
+        aux5   = aux4**(this%fq - 1.0d0)
+        y1     = -aux1*aux5*aux4
+        dfDy1  = this%fGammaDot0*exp(y1)*sign(1.0d0, tauResl(i))
+        dy1Dy2 = aux2*aux5*aux3
+        if (this%fTauCritTCode == kConstTauCritT) then
+          dy2dx  = -1.0d0/tauCritT(i)
+        else if (this%fTauCritTCode == kVaryingTauCritT) then
+          dy2dx  = -tauReslT(i)/(tauCritT(i)*tauCritT(i))*this%fYeta
+        end if
+        dGammaDotDTauCrit(i) = dfdy1*dy1dy2*dy2dx
       else
-        write(*, *) "Error in SlipKineFrostAshby::SlipRate"
+        write(*, *) "Error in SlipKineFrostAshby::DSlipRateDTauCrit"
         stop
       end if
     end do
-
-    if (this%fTauCritTCode == kVaryingTauCritT) then
-      dGammaDotDTauCrit = dGammaDotDTauCrit*aux3
-    end if
-     
+    
   end function DSlipRateDTauCrit
 
 
@@ -499,7 +508,8 @@ contains
     if (this%fTauCritTCode == kConstTauCritT) then
       tauCritT = this%fTauCritT
     else if (this%fTauCritTCode == kVaryingTauCritT) then
-      tauCritT = tauCrit*(this%fYeta/(1.0d0 + this%fYeta))
+    ! this%fYeta is actually yeta/(1.0+yeta)
+      tauCritT = tauCrit*this%fYeta
     end if
     tauCritAT = tauCrit - tauCritT 
     tauReslT  = dabs(tauResl) - tauCritAT 

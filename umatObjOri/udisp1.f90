@@ -11,14 +11,18 @@
     integer(kind = 4), intent(in)  :: jdof
     real(kind = 8),    intent(in)  :: coords(3)
 
-    ! nominal strain rate
-    real(kind = 8), parameter :: tensilRate = 5000.0
+    real(kind = 8) :: engShear
+
+    real(kind = 8), parameter :: shearRate = 6.667d-4
     real(kind = 8), parameter :: eps = 1.0d-5
 
-    ! Be awared that the coords is the current coordinates rather than the initial ones.
-    if (node == 3 .or. node == 4 .or. node == 7 .or. node == 8 .and. jdof == 2) then  
-    !if (abs(coords(2) - 1.0d0) < eps .and. jdof == 2) then  
-      u(1) = tensilRate*time(2)
-    end if
+    engShear = 2.0d0*(exp(shearRate) - 1.0d0)*time(2)
+!    if (abs(coords(3)) < eps .or. abs(coords(3) - 1.0d0) < eps) then
+      if (jdof == 1 .and. jdof == 3) then
+        u(1) = 0.0d0
+      else if (jdof == 2) then 
+        u(1) = engShear*coords(3)
+      end if
+ !   end if
 
   end subroutine disp

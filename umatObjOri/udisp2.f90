@@ -15,9 +15,7 @@
     real(kind = 8), parameter :: tensilRate = 5000.0
     real(kind = 8), parameter :: eps = 1.0d-5
 
-    ! Be awared that the coords is the current coordinates rather than the initial ones.
-    if (node == 3 .or. node == 4 .or. node == 7 .or. node == 8 .and. jdof == 2) then  
-    !if (abs(coords(2) - 1.0d0) < eps .and. jdof == 2) then  
+    if (abs(coords(2) - 1.0d0) < eps .and. jdof == 2) then  
       u(1) = tensilRate*time(2)
     end if
 

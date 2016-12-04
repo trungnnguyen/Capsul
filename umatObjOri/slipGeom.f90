@@ -11,7 +11,7 @@ module typeSlipGeom
   type, abstract, public :: SlipGeom
     integer(kind = IKIND)              :: fNumSlipSys
     integer(kind = IKIND)              :: fNumSlipSet
-    integer(kind = IKIND), allocatable :: fSlipSet(:)
+    integer(kind = IKIND), allocatable :: fSlipSet(:,  :)
     real(kind = RKIND),    allocatable :: fSlipVecS(:, :)
     real(kind = RKIND),    allocatable :: fSlipVecM(:, :)
     real(kind = RKIND),    allocatable :: fSchmidt(:, :, :)
@@ -42,7 +42,7 @@ contains
   subroutine InitSlipGeom(this)
     class(SlipGeom), intent(inout) :: this
 
-    allocate(this%fSlipSet(this%fNumSlipSys))
+    allocate(this%fSlipSet(2, this%fNumSlipSys))
 
     allocate(this%fSlipVecS(3, this%fNumSlipSys))
     allocate(this%fSlipVecM(3, this%fNumSlipSys))
@@ -85,7 +85,7 @@ contains
 
   function SlipSet(this) result(theSlipSet) 
     class(SlipGeom), intent(in) :: this
-    integer(kind = IKIND) :: theSlipSet(this%fNumSlipSys)
+    integer(kind = IKIND) :: theSlipSet(2, this%fNumSlipSys)
 
     theSlipSet = this%fSlipSet
   
@@ -191,7 +191,13 @@ contains
     this%fSlipVecM(:, 11) = (/-1,  1,  1/)
     this%fSlipVecM(:, 12) = (/-1,  1,  1/)
 
-    this%fSlipSet    = 1
+    ! All slip systems are in the set with same material parameters
+    this%fSlipSet(1,  1:12) = 1
+    ! coplanar systems have same ID
+    this%fSlipSet(2,  1: 3) = 1
+    this%fSlipSet(2,  4: 6) = 2
+    this%fSlipSet(2,  7: 9) = 3
+    this%fSlipSet(2, 10:12) = 4
 
   end subroutine SetSlipVectors
 
@@ -222,7 +228,7 @@ contains
   function Constructor() result(this)
     type(SlipGeomBCC), pointer :: this
     integer(kind = IKIND), parameter :: kNumSlipSet = 1
-    integer(kind = IKIND), parameter :: kNumSlipSys = 12
+    integer(kind = IKIND), parameter :: kNumSlipSys = 24
 
     allocate(this)
 
@@ -257,6 +263,19 @@ contains
     this%fSlipVecS(:, 11) = (/1,   0,  -1/)
     this%fSlipVecS(:, 12) = (/0,   1,  -1/)
 
+    this%fSlipVecS(:, 13) = (/1,  -2,  -1/)
+    this%fSlipVecS(:, 14) = (/1,   1,   2/)
+    this%fSlipVecS(:, 15) = (/2,  -1,   1/)
+    this%fSlipVecS(:, 16) = (/1,  -1,   2/)
+    this%fSlipVecS(:, 17) = (/1,   2,  -1/)
+    this%fSlipVecS(:, 18) = (/2,   1,   1/)
+    this%fSlipVecS(:, 19) = (/1,  -1,  -2/)
+    this%fSlipVecS(:, 20) = (/1,   2,   1/)
+    this%fSlipVecS(:, 21) = (/2,   1,  -1/)
+    this%fSlipVecS(:, 22) = (/1,  -2,   1/)
+    this%fSlipVecS(:, 23) = (/1,  -2,   1/)
+    this%fSlipVecS(:, 24) = (/2,  -1,  -1/)
+
     this%fSlipVecM(:,  1) = (/1,   1,  -1/)
     this%fSlipVecM(:,  2) = (/1,   1,  -1/)
     this%fSlipVecM(:,  3) = (/1,   1,  -1/)
@@ -270,7 +289,31 @@ contains
     this%fSlipVecM(:, 11) = (/1,   1,   1/)
     this%fSlipVecM(:, 12) = (/1,   1,   1/)
 
-    this%fSlipSet    = 1
+    this%fSlipVecM(:, 13) = (/1,   1,  -1/)
+    this%fSlipVecM(:, 14) = (/1,   1,  -1/)
+    this%fSlipVecM(:, 15) = (/1,   1,  -1/)
+    this%fSlipVecM(:, 16) = (/1,  -1,  -1/)
+    this%fSlipVecM(:, 17) = (/1,  -1,  -1/)
+    this%fSlipVecM(:, 18) = (/1,  -1,  -1/)
+    this%fSlipVecM(:, 19) = (/1,  -1,   1/)
+    this%fSlipVecM(:, 20) = (/1,  -1,   1/)
+    this%fSlipVecM(:, 21) = (/1,  -1,   1/)
+    this%fSlipVecM(:, 22) = (/1,   1,   1/)
+    this%fSlipVecM(:, 23) = (/1,   1,   1/)
+    this%fSlipVecM(:, 24) = (/1,   1,   1/)
+
+
+    this%fSlipSet(1,  1:12) = 1
+    this%fSlipSet(1, 13:24) = 1
+    ! coplanar systems have same ID
+    this%fSlipSet(2,  1: 3) = 1
+    this%fSlipSet(2,  4: 6) = 2
+    this%fSlipSet(2,  7: 9) = 3
+    this%fSlipSet(2, 10:12) = 4
+    this%fSlipSet(2, 13:15) = 1
+    this%fSlipSet(2, 16:18) = 2
+    this%fSlipSet(2, 19:21) = 3
+    this%fSlipSet(2, 22:24) = 4
 
   end subroutine
 
@@ -382,7 +425,7 @@ contains
 
     do i = 1, this%fNumSlipSys
       call ReadLine(this%fID, line)
-      read(line, *) this%fSlipVecM(1:3, i), this%fSlipVecS(1:3, i), this%fSlipSet(i)
+      read(line, *) this%fSlipVecM(1:3, i), this%fSlipVecS(1:3, i), this%fSlipSet(1:2, i)
     end do
       
   end subroutine SetSlipVectors

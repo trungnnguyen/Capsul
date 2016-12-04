@@ -199,6 +199,7 @@
     end function tenMul
 
 
+
     function ten4Rot(ten4, rot)
       
       real(kind = RKIND) :: ten4(3, 3, 3, 3)
@@ -260,6 +261,7 @@
       end do
 
     end function MultAijmnBmnkl
+
 
 
     function MultCijklEkl(Cijkl, Ekl) result(Sij)
@@ -514,6 +516,7 @@
     end subroutine polarDcmp
 
 
+
     function Ten3333ToA99(Ten3333)
 
       real(kind = RKIND), intent(in) :: Ten3333(3, 3, 3, 3)
@@ -550,6 +553,49 @@
       end do
 
     end function Ten3333ToA66
+
+
+    function AnglesToRotMatrix(angle) result(rotMatx)
+      real(kind = RKIND), intent(in) :: angle(3)
+      real(kind = RKIND) :: rotMatx(3, 3)
+      real(kind = RKIND) :: sps, cps, sth, cth, sph, cph
+
+      sps = sin(angle(1))
+      cps = cos(angle(1))
+      sth = sin(angle(2))
+      cth = cos(angle(2))
+      sph = sin(angle(3))
+      cph = cos(angle(3))
+
+      rotMatx(1, 1) = -sps * sph - cps * cph * cth
+      rotMatx(2, 1) =  cps * sph - sps * cph * cth
+      rotMatx(3, 1) =  cph * sth
+      rotMatx(1, 2) =  cph * sps - sph * cps * cth
+      rotMatx(2, 2) = -cps * cph - sps * sph * cth
+      rotMatx(3, 2) =  sph * sth
+      rotMatx(1, 3) =  cps * sth
+      rotMatx(2, 3) =  sps * sth
+      rotMatx(3, 3) =  cth
+
+    end function AnglesToRotMatrix
+
+
+    function RotMatrixToAngles(rotMatx) result(angle)
+      real(kind = RKIND), intent(in) :: rotMatx(3, 3)
+      real(kind = RKIND) :: angle(3)
+      real(kind = RKIND) :: sth
+
+      angle(2) = acos(rotMatx(3, 3))  
+      if (dabs(rotMatx(3, 3)) /= 1.0d0) then
+        sth = sin(angle(2))
+        angle(1) = atan2(rotMatx(2, 3)/sth, rotMatx(1, 3)/sth)
+        angle(3) = atan2(rotMatx(3, 2)/sth, rotMatx(3, 1)/sth)
+      else
+        angle(1) = 0.0d0
+        angle(3) = atan2(-rotMatx(1, 2), -rotMatx(1, 1))
+      end if
+
+    end function RotMatrixToAngles
 
 
 

@@ -201,7 +201,6 @@ contains
     aux1 = factor*this%fGammaDot0/this%fXm
     aux2 = 1.0d0/this%fXm - 1.0d0
     do i = 1, this%fNumSlipSys
-     ! DSlipRateDTauResl(i) = aux1*this%Power(dabs(tauRatio(i)), aux2)/tauCrit(i)
       dGammaDotDTauResl(i) = aux1*dabs(tauRatio(i))**aux2/tauCrit(i)
     end do
 
@@ -421,7 +420,7 @@ contains
         aux3   = tauRatio(i)**(this%fp - 1.0d0)
         aux4   = 1.0d0 - aux3*tauRatio(i)
         aux5   = aux4**(this%fq - 1.0d0)
-        y1     = -aux1*aux5*aux4
+        y1     = -aux1*aux4*aux5
         dfDy1  = this%fGammaDot0*exp(y1)
         dy1Dy2 = aux2*aux5*aux3
         dy2dx  = 1.0d0/tauCritT(i) 
@@ -455,8 +454,6 @@ contains
 
     if (this%fTauCritTCode == kConstTauCritT) then
       tauCritT = this%fTauCritT
-      dGammaDotDTauCrit = 0
-      return
     else if (this%fTauCritTCode == kVaryingTauCritT) then
     ! this%fYeta is actually yeta/(1.0+yeta)
       tauCritT = tauCrit*this%fYeta

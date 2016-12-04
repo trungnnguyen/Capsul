@@ -6,6 +6,7 @@
 
     integer(kind = RKIND), parameter :: kConvgIter   = 1
     integer(kind = RKIND), parameter :: kPertubation = 2
+    integer(kind = RKIND), parameter :: kNumGrains   = 200
 
     type, public :: CrysPlasMatPt
       real(kind = RKIND)    :: fStress(6) 
@@ -58,7 +59,7 @@
       procedure, public  :: ResetStateVar
       procedure, public  :: SaveStateVar
       procedure, public  :: GetCauchyStress
-      procedure, public  :: GetMatJacob
+      procedure, public  :: GetMaterialJacob
       procedure, public  :: GetDSigDTemp
       procedure, public  :: GetHeatGenRate
       procedure, public  :: GetDRplDEps
@@ -425,13 +426,13 @@
 
 
 
-    function GetMatJacob(this) result(jacob)
+    function GetMaterialJacob(this) result(jacob)
       class(CrysPlasMatPt) :: this
       real(kind = RKIND)   :: jacob(6, 6)
 
       jacob = this%fDSigDEps
 
-    end function GetMatJacob
+    end function GetMaterialJacob
 
 
     function GetDSigDTemp(this) result(ddsddt)

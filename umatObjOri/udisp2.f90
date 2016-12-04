@@ -1,5 +1,7 @@
 ! user subroutine for a prescribed boundary conditions
   subroutine disp(u, kstep, kinc, time, node, noel, jdof, coords)
+    use init
+
     implicit none
 
     real(kind = 8),    intent(out) :: u(3)
@@ -13,10 +15,12 @@
 
     ! nominal strain rate
     real(kind = 8), parameter :: tensilRate = 5000.0
-    real(kind = 8), parameter :: eps = 1.0d-5
 
-    if (abs(coords(2) - 1.0d0) < eps .and. jdof == 2) then  
-      u(1) = tensilRate*time(2)
+    real(kind = 8) :: X0(3)
+
+    X0 = getInitCoords(node)
+    if (jdof == 3) then  
+      u(1) = tensilRate*time(2)*X0(3)
     end if
 
   end subroutine disp

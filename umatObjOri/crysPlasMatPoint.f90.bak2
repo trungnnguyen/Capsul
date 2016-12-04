@@ -6,18 +6,34 @@
 
     integer(kind = RKIND), parameter :: kConvgIter   = 1
     integer(kind = RKIND), parameter :: kPertubation = 2
+    integer(kind = RKIND), parameter :: kNumGrains   = 1
 
     type, public :: CrysPlasMatPt
-      real(kind = RKIND)    :: fStress(6) 
-      real(kind = RKIND)    :: fDSigDEps(6, 6) 
-      real(kind = RKIND)    :: fDSigDTemp(6) 
-      real(kind = RKIND)    :: fRpl 
-      real(kind = RKIND)    :: fDRplDEps(6) 
-      real(kind = RKIND)    :: fDRplDTemp 
+      ! Grain Averaged variables at the current material point(integeration point)
+      real(kind = RKIND)    :: fAvgSig(6) 
+      real(kind = RKIND)    :: fAvgCijkl(6, 6) 
+      real(kind = RKIND)    :: fAvgDSigDTemp(6) 
+      real(kind = RKIND)    :: fAvgRpl 
+      real(kind = RKIND)    :: fAvgDRplDEps(6) 
+      real(kind = RKIND)    :: fAvgDRplDTemp 
+
       real(kind = RKIND)    :: fNewDt
+      real(kind = RKIND)    :: fDt
+      logical(kind = LKIND) :: fIsTempDep
 
       class(CrysPlasMat),  pointer :: fCrysPlasMat
-      real(kind = RKIND)    :: fDt
+      integer(kind = IKIND) :: fNumSlipSys
+      integer(kind = RKIND) :: fNumGrains
+      integer(kind = RKIND) :: fNumVarsPerGrn
+
+      !* Variables for Current Grain
+      real(kind = RKIND)    :: fCrysSig(6)
+      real(kind = RKIND)    :: fCrysCijkl(6, 6)
+      real(kind = RKIND)    :: fCrysDSigDTemp(6)
+      real(kind = RKIND)    :: fCrysRpl
+      real(kind = RKIND)    :: fCrysDRplDEps(6) 
+      real(kind = RKIND)    :: fCrysDRplDTemp 
+
       real(kind = RKIND)    :: fTempOld  
       real(kind = RKIND)    :: fFtotOld(3, 3)    
 
@@ -37,26 +53,23 @@
       real(kind = RKIND)    :: fRotMatx(3, 3)
       real(kind = RKIND)    :: fEulerAng(3)
 
-
       real(kind = RKIND), allocatable :: fTauResl(:)
       real(kind = RKIND), allocatable :: fGammaDot(:)
       real(kind = RKIND), allocatable :: fDGamma(:)  
 
-
-      integer(kind = IKIND) :: fNumSlipSys
       real(kind = RKIND)    :: fCijkl(3, 3, 3, 3)
       real(kind = RKIND), allocatable :: fSchmidt(:, :, :)
 
-
-      logical(kind = LKIND) :: fIsTempDep
 
     contains
       procedure, public  :: InitMatPt
       procedure, public  :: AdvanceStep
       procedure, public  :: InitStateVar
-      procedure, public  :: LoadStateVar
-      procedure, public  :: ResetStateVar
-      procedure, public  :: SaveStateVar
+      procedure, public  :: SetCrysOldState
+      procedure, public  :: SetCrysNewState
+      procedure, public  :: GetCrysCurState
+      procedure, public  :: LoadCrysState
+      procedure, public  :: SaveCrysState
       procedure, public  :: GetCauchyStress
       procedure, public  :: GetMatJacob
       procedure, public  :: GetDSigDTemp
@@ -83,7 +96,7 @@
       procedure, private :: SolveStep
       procedure, private :: PostStep
 
-      procedure, private :: FormRotMatx
+      !procedure, private :: FormRotMatx
       final              :: Destructor
 
     end type CrysPlasMatPt
@@ -127,6 +140,31 @@
       end if
 
       this%fNumSlipSys  = this%fCrysPlasMat%GetNumSlipSys()
+      this%fNumGrains   = kNumGrains
+      this%fNumVarsPerGrn = 30 + 2*this%fNumSlipSys
+
+      this%fTempOld    = 300
+      this%fTempNew    = this%fTempOld
+      this%fFtotOld    = UNITMAT
+      this%fFtotNew    = this%fFtotOld
+
+      this%fDt         = 0.0d0
+      this%fNewDt      = 1.0d0
+
+      this%fAvgSig        = 0.0d0
+      this%fAvgCijkl      = 0.0d0
+      this%fAvgRpl        = 0.0d0
+      this%fAvgDSigDTemp  = 0.0d0
+      this%fAvgDRplDEps   = 0.0d0
+      this%fAvgDRplDTemp  = 0.0d0
+
+      !* Variables for Current Grain
+      this%fCrysSig       = 0.0d0
+      this%fCrysCijkl     = 0.0d0
+      this%fCrysDSigDTemp = 0.0d0
+      this%fCrysRpl       = 0.0d0
+      this%fCrysDRplDEps  = 0.0d0
+      this%fCrysDRplDTemp = 0.0d0 
 
       allocate(this%fTauCritOld(this%fNumSlipSys))  
       allocate(this%fTauCritNew(this%fNumSlipSys))  
@@ -142,18 +180,6 @@
       this%fLPlsNew    = this%fLPlsOld
       this%fTauCritNew = this%fTauCritOld
       this%fGammaNew   = this%fGammaOld
-
-      this%fTempOld    = 300
-      this%fTempNew    = this%fTempOld
-      this%fFtotOld    = UNITMAT
-      this%fFtotNew    = this%fFtotOld
-
-      this%fStress     = 0.0d0
-      this%fDSigDEps   = 0.0d0
-      this%fRpl        = 0.0d0
-
-      this%fDt         = 0.0d0
-      this%fNewDt      = 1.0d0
 
       this%fRotMatx    = UNITMAT
       this%fEulerAng   = (/0.0d0, 0.0d0, 0.0d0/)
@@ -192,179 +218,238 @@
 
    
 
-    subroutine FormRotMatx(this, oriArray)
-      use algebra, only : normalize, cross_product
-  
-      class(CrysPlasMatPt)           :: this
-      real(kind = RKIND), intent(in) :: oriArray(6)
-  
-      real(kind = RKIND) :: auxVec1(3)
-      real(kind = RKIND) :: auxVec2(3)
-  
-      auxVec1 = oriArray(1:3)
-      auxVec2 = oriArray(4:6)
-  
-      call normalize(auxVec1)
-      call normalize(auxVec2)
-  
-      this%fRotMatx(:, 1) = auxVec1
-      this%fRotMatx(:, 2) = auxVec2
-      this%fRotMatx(:, 3) = cross_product(this%fRotMatx(:, 1), this%fRotMatx(:, 2))
-  
-    end subroutine FormRotMatx
+ !   subroutine FormRotMatx(this, oriArray)
+ !     use algebra, only : normalize, cross_product
+ ! 
+ !     class(CrysPlasMatPt)           :: this
+ !     real(kind = RKIND), intent(in) :: oriArray(6)
+ ! 
+ !     real(kind = RKIND) :: auxVec1(3)
+ !     real(kind = RKIND) :: auxVec2(3)
+ ! 
+ !     auxVec1 = oriArray(1:3)
+ !     auxVec2 = oriArray(4:6)
+ ! 
+ !     call normalize(auxVec1)
+ !     call normalize(auxVec2)
+ ! 
+ !     this%fRotMatx(:, 1) = auxVec1
+ !     this%fRotMatx(:, 2) = auxVec2
+ !     this%fRotMatx(:, 3) = cross_product(this%fRotMatx(:, 1), this%fRotMatx(:, 2))
+ ! 
+ !   end subroutine FormRotMatx
   
 
 
     subroutine InitStateVar(this, oriArray, statev, nstatv)
+      use algebra,  only : normalize, cross_product, AnglesToRotMatrix, PI
+
       class(CrysPlasMatPt)               :: this
       real(kind = RKIND),    intent(in)  :: oriArray(6)   
       integer(kind = IKIND), intent(in)  :: nstatv
       real(kind = RKIND)                 :: statev(nstatv)
 
-      call this%FormRotMatx(oriArray)
-      call this%SaveStateVar(statev, nstatv)
+      real(kind = RKIND)    :: angle(3)
+      real(kind = RKIND)    :: rotMatx(3, 3)
+      real(kind = RKIND)    :: crysStateVars(this%fNumVarsPerGrn)
+      integer(kind = IKIND) :: iGrn
+  
+  
+
+      if (this%fNumGrains == 1) then
+        rotMatx(:, 1) = oriArray(1:3)
+        rotMatx(:, 2) = oriArray(4:6)
+  
+        call normalize(rotMatx(1, :))
+        call normalize(rotMatx(2, :))
+        rotMatx(:, 3) = cross_product(rotMatx(:, 1), rotMatx(:, 2))
+  
+        this%fRotMatx = rotMatx
+
+        iGrn = 1
+        call this%GetCrysCurState(crysStateVars)
+        call this%SaveCrysState(iGrn, crysStateVars, statev, nstatv)
+      else
+        do iGrn = 1, this%fNumGrains
+          call random_seed()
+          call random_number(angle)
+          angle(1) = angle(1)*2.0d0*PI
+          angle(2) = angle(2)*PI
+          angle(3) = angle(3)*2.0d0*PI
+
+          rotMatx  = AnglesToRotMatrix(angle)
+          this%fRotMatx = rotMatx
+
+          call this%GetCrysCurState(crysStateVars)
+          call this%SaveCrysState(iGrn, crysStateVars, statev, nstatv)
+         end do
+
+       end if
 
     end subroutine InitStateVar
 
 
-
-    subroutine LoadStateVar(this, statev, nstatv)
-      class(CrysPlasMatPt)              :: this
-      integer(kind = IKIND), intent(in) :: nstatv
-      real(kind = RKIND),    intent(in) :: statev(nstatv)
-
-      integer(kind = IKIND) :: arrLen, idxLo, idxHi
-
-
-      arrLen = 9
-      idxLo = 1
-      idxHi = idxLo + arrLen - 1
-      this%fFElsOld = reshape(statev(idxLo : idxHi), (/3, 3/))  
-  
-    
-      arrLen = this%fNumSlipSys
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fGammaOld = statev(idxLo : idxHi)
-  
-      arrLen = this%fNumSlipSys
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fTauCritOld = statev(idxLo : idxHi)
-  
-      arrLen = 9
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fLPlsOld = reshape(statev(idxLo : idxHi), (/3, 3/))
-
-      arrLen = 9
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fRotMatx = reshape(statev(idxLo: idxHi), (/3, 3/))
-  
-
-      arrLen = 3
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fEulerAng = statev(idxLo: idxHi)
-
-    end subroutine LoadStateVar
-
-
-
-    subroutine ResetStateVar(this, statev, nstatv)
-      class(CrysPlasMatPt)              :: this
-      integer(kind = IKIND), intent(in) :: nstatv
-      real(kind = RKIND),    intent(in) :: statev(nstatv)
-
-      integer(kind = IKIND) :: arrLen, idxLo, idxHi
-
-
-      arrLen = 9
-      idxLo = 1
-      idxHi = idxLo + arrLen - 1
-      this%fFElsNew = reshape(statev(idxLo : idxHi), (/3, 3/))  
-  
-    
-      arrLen = this%fNumSlipSys
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fGammaNew = statev(idxLo : idxHi)
-  
-      arrLen = this%fNumSlipSys
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fTauCritNew = statev(idxLo : idxHi)
-  
-      arrLen = 9
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fLPlsNew = reshape(statev(idxLo : idxHi), (/3, 3/))
-
-      arrLen = 9
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fRotMatx = reshape(statev(idxLo: idxHi), (/3, 3/))
-  
-
-      arrLen = 3
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      this%fEulerAng = statev(idxLo: idxHi)
-
-    end subroutine ResetStateVar
-
-
-  
-    subroutine SaveStateVar(this, statev, nstatv)
-      class(crysPlasMatPt),  intent(in)  :: this
+    subroutine LoadCrysState(this, statev, nstatv, iGrain, crysStateVars)  
+      class(CrysPlasMatPt)               :: this
       integer(kind = IKIND), intent(in)  :: nstatv
-      real(kind = RKIND),    intent(out) :: statev(nstatv)
-  
-      integer(kind = IKIND) :: idxLo, idxHi, arrLen
-  
+      real(kind = RKIND),    intent(in)  :: statev(nstatv)
+      integer(kind = IkIND), intent(in)  :: iGrain
+      real(kind = RKIND),    intent(out) :: crysStateVars(this%fNumVarsPerGrn)
+
+      integer(kind = IKIND) :: bgnLoc, endLoc
+
+      ! Begin location for the current grain
+      bgnLoc = (iGrain - 1) * this%fNumVarsPerGrn + 1
+      endLoc = bgnLoc + this%fNumVarsPerGrn - 1
+
+      crysStateVars = statev(bgnLoc : endLoc)
+
+    end subroutine LoadCrysState
+
+
+
+    subroutine SetCrysOldState(this, crysStateVars)
+      class(CrysPlasMatPt)            :: this
+      real(kind = RKIND),  intent(in) :: crysStateVars(this%fNumVarsPerGrn)
+
+      integer(kind = IKIND) :: arrLen, idxLo, idxHi
+
       arrLen = 9
       idxLo = 1
       idxHi = idxLo + arrLen - 1
-      statev(idxLo : idxHi)   = reshape(this%fFElsNew, (/9/))
+      this%fFElsOld = reshape(crysStateVars(idxLo : idxHi), (/3, 3/))  
+  
+    
+      arrLen = this%fNumSlipSys
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fGammaOld = crysStateVars(idxLo : idxHi)
+  
+      arrLen = this%fNumSlipSys
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fTauCritOld = crysStateVars(idxLo : idxHi)
+  
+      arrLen = 9
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fLPlsOld = reshape(crysStateVars(idxLo : idxHi), (/3, 3/))
+
+      arrLen = 9
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fRotMatx = reshape(crysStateVars(idxLo: idxHi), (/3, 3/))
+
+      arrLen = 3
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fEulerAng = crysStateVars(idxLo: idxHi)
+
+    end subroutine SetCrysOldState
+
+
+
+    subroutine SetCrysNewState(this, crysStateVars)
+      class(CrysPlasMatPt)              :: this
+      real(kind = RKIND),    intent(in) :: crysStateVars(this%fNumVarsPerGrn)
+
+      integer(kind = IKIND) :: arrLen, idxLo, idxHi
+
+      arrLen = 9
+      idxLo = 1
+      idxHi = idxLo + arrLen - 1
+      this%fFElsNew = reshape(crysStateVars(idxLo : idxHi), (/3, 3/))  
+  
+    
+      arrLen = this%fNumSlipSys
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fGammaNew = crysStateVars(idxLo : idxHi)
+  
+      arrLen = this%fNumSlipSys
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fTauCritNew = crysStateVars(idxLo : idxHi)
+  
+      arrLen = 9
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fLPlsNew = reshape(crysStateVars(idxLo : idxHi), (/3, 3/))
+
+      arrLen = 9
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fRotMatx = reshape(crysStateVars(idxLo: idxHi), (/3, 3/))
+  
+
+      arrLen = 3
+      idxLo  = idxHi + 1
+      idxHi  = idxLo + arrLen - 1
+      this%fEulerAng = crysStateVars(idxLo: idxHi)
+
+    end subroutine SetCrysNewState
+
+
+    subroutine GetCrysCurState(this, crysStateVars)
+      class(crysPlasMatPt),  intent(in)  :: this
+      real(kind = RKIND),    intent(out) :: crysStateVars(this%fNumVarsPerGrn)
+
+      integer(kind = IKIND) :: arrLen, idxLo, idxHi
+
+      arrLen = 9
+      idxLo = 1
+      idxHi = idxLo + arrLen - 1
+      crysStateVars(idxLo : idxHi)   = reshape(this%fFElsNew, (/9/))
   
         
       arrLen = this%fNumSlipSys
       idxLo  = idxHi + 1
       idxHi  = idxLo + arrLen - 1
-      statev(idxLo : idxHi) = this%fGammaNew
+      crysStateVars(idxLo : idxHi) = this%fGammaNew
   
       arrLen = this%fNumSlipSys
       idxLo  = idxHi + 1
       idxHi  = idxLo + arrLen - 1
-      statev(idxLo  :  idxHi)  = this%fTauCritNew
+      crysStateVars(idxLo  :  idxHi)  = this%fTauCritNew
   
       arrLen = 9
       idxLo  = idxHi + 1
       idxHi  = idxLo + arrLen - 1
-      statev(idxLo : idxHi) = reshape(this%fLPlsNew, (/9/)) 
+      crysStateVars(idxLo : idxHi) = reshape(this%fLPlsNew, (/9/)) 
 
       arrLen = 9
       idxLo  = idxHi + 1
       idxHi  = idxLo + arrLen - 1
-      statev(idxLo : idxHi) = reshape(this%fRotMatx, (/9/)) 
+      crysStateVars(idxLo : idxHi) = reshape(this%fRotMatx, (/9/)) 
   
-
       arrLen = 3
       idxLo  = idxHi + 1
       idxHi  = idxLo + arrLen - 1
-      statev(idxLo: idxHi) = this%fEulerAng
+      crysStateVars(idxLo: idxHi) = this%fEulerAng
   
-      arrLen = 1
-      idxLo  = idxHi + 1
-      idxHi  = idxLo + arrLen - 1
-      statev(idxLo : idxHi) = sum(this%fGammaNew)
-  
-
-    end subroutine SaveStateVar
+    end subroutine GetCrysCurState
   
 
   
+    subroutine SaveCrysState(this, iGrain, crysStateVars, statev, nstatv)
+      class(crysPlasMatPt),  intent(in)  :: this
+      integer(kind = IKIND), intent(in)  :: iGrain
+      real(kind = RKIND),    intent(in)  :: crysStateVars(this%fNumVarsPerGrn)
+      integer(kind = IKIND), intent(in)  :: nstatv
+      real(kind = RKIND),    intent(out) :: statev(nstatv)
+  
+      integer(kind = IKIND) :: bgnLoc, endLoc
+  
+      ! Begin location for the current grain
+      bgnLoc = (iGrain - 1) * this%fNumVarsPerGrn + 1
+      endLoc = bgnLoc + this%fNumVarsPerGrn - 1 
+
+      statev(bgnLoc : endLoc) = crysStateVars
+
+    end subroutine SaveCrysState
+
+
+      
             
     subroutine AdvanceStep(this, FTotOld, FTotNew, TempOld, TempNew, statev, nstatv, dtime)
       use algebra, only : Ten3333ToA66
@@ -375,41 +460,42 @@
       real(kind = RKIND),    intent(in) :: TempOld
       real(kind = RKIND),    intent(in) :: TempNew
       integer(kind = IKIND), intent(in) :: nstatv
-      real(kind = RKIND),    intent(in) :: statev(nstatv)
       real(kind = RKIND),    intent(in) :: dtime
+      real(kind = RKIND),    intent(inout) :: statev(nstatv)
 
-      real(kind = RKIND) :: stressNew(6)
-      real(kind = RKIND) :: fNewDt
-      real(kind = RKIND) :: statevOld(nstatv)
-      real(kind = RKIND) :: statevNew(nstatv)
-      real(kind = RKIND) :: statevCvg(nstatv)
+      real(kind = RKIND) :: crysOldStateVars(this%fNumVarsPerGrn)
+      real(kind = RKIND) :: crysNewStateVars(this%fNumVarsPerGrn)
+      real(kind = RKIND) :: crysCvgStateVars(this%fNumVarsPerGrn)
 
       integer(kind = IKIND) :: stage
+      integer(kind = IKIND) :: iGrn
 
 
-      stage     = kConvgIter
-      statevOld = statev
-      statevNew = statev
-      call this%UpdateStress(FTotOld, FTotNew, TempOld, TempNew, statevOld, statevNew, nstatv, dtime, stage)
+      this%fDt      = dtime
+      this%fFTotOld = FTotOld
+      this%fFTotNew = FTotNew
+      this%fTempOld = TempOld
+      this%fTempNew = TempNew
 
+      do iGrn = 1, this%fNumGrains
+        call this%LoadCrysState(statev, nstatv, iGrn, crysOldStateVars)
+        crysNewStateVars = crysOldStateVars
 
-     ! stressCvg   = this%fStress
-     ! rplCvg      = this%fRpl
-     ! tauReslCvg  = this%fTauResl
-     ! gammaDotCvg = this%fGammaDot 
-      call this%SaveStateVar(statevCvg, nstatv)
+        stage = kConvgIter
+        call this%UpdateStress(crysOldStateVars, crysNewStateVars, stage)
 
+        this%fAvgSig = this%fAvgSig + this%fCrysSig
+        this%fAvgRpl = this%fAvgRpl + this%fCrysRpl
 
-      ! pertubation method to calculate ddsdde and drplde
-      stage     = kPertubation
-      statevOld = statev
-      statevNew = statevCvg
-      call this%Pertubation(FTotOld, FTotNew, TempOld, TempNew, statevOld, statevNew, nstatv, dtime, stage)
+        call this%GetCrysCurState(crysCvgStateVars)
+
+        ! pertubation method to calculate ddsdde and drplde
+        stage = kPertubation
+        call this%Pertubation(crysOldStateVars, crysCvgStateVars, stage)
+        this%fAvgCijkl = this%fAvgCijkl + this%fCrysCijkl
       
-     ! this%fStress   = stressCvg
-     ! this%fTauResl  = tauReslCvg
-     ! this%fGammaDot = gammaDotCvg 
-      call this%ResetStateVar(statevCvg, nstatv)
+        call this%SaveCrysState(iGrn, crysCvgStateVars, statev, nstatv)
+      end do
 
     end subroutine AdvanceStep
 
@@ -419,7 +505,8 @@
       class(CrysPlasMatPt) :: this
       real(kind = RKIND)   :: sigma(6)
 
-      sigma = this%fStress
+      sigma = this%fAvgSig / this%fNumGrains
+
 
     end function GetCauchyStress
 
@@ -429,7 +516,7 @@
       class(CrysPlasMatPt) :: this
       real(kind = RKIND)   :: jacob(6, 6)
 
-      jacob = this%fDSigDEps
+      jacob = this%fAvgCijkl / this%fNumGrains
 
     end function GetMatJacob
 
@@ -438,7 +525,7 @@
       class(CrysPlasMatPt) :: this
       real(kind = RKIND)   :: ddsddt(6)
 
-      ddsddt = this%fDSigDTemp
+      ddsddt = this%fAvgDSigDTemp / this%fNumGrains
 
     end function GetDSigDTemp
 
@@ -448,7 +535,7 @@
       class(CrysPlasMatPt) :: this
       real(kind = RKIND)   :: rpl
 
-      rpl = this%fRpl
+      rpl = this%fAvgRpl / this%fNumGrains
 
     end function
 
@@ -457,7 +544,7 @@
       class(CrysPlasMatPt) :: this
       real(kind = RKIND)   :: dRplDT
 
-      dRplDT = this%fDRplDTemp
+      dRplDT = this%fAvgDRplDTemp / this%fNumGrains
 
     end function GetDRplDTemp
 
@@ -467,7 +554,7 @@
       class(CrysPlasMatPt) :: this
       real(kind = RKIND)   :: dRplDE(6)
 
-      dRplDE = this%fDRplDEps
+      dRplDE = this%fAvgDRplDEps / this%fNumGrains
 
     end function GetDRplDEps
 
@@ -483,27 +570,14 @@
 
 
 
-    subroutine UpdateStress(this, FTotOld, FTotNew, TempOld, TempNew, statevOld, statevNew, nstatv, dtime, stage)
+    subroutine UpdateStress(this, crysOldStateVars, crysNewStateVars, stage)
       class(CrysPlasMatPt) :: this
-      real(kind = RKIND),    intent(in) :: FTotOld(3, 3)
-      real(kind = RKIND),    intent(in) :: FTotNew(3, 3)
-      real(kind = RKIND),    intent(in) :: TempOld
-      real(kind = RKIND),    intent(in) :: TempNew
-      integer(kind = IKIND), intent(in) :: nstatv
-      real(kind = RKIND),    intent(in) :: statevOld(nstatv)
-      real(kind = RKIND),    intent(in) :: statevNew(nstatv)
-      real(kind = RKIND),    intent(in) :: dtime
+      real(kind = RKIND), intent(in)    :: crysOldStateVars(this%fNumVarsPerGrn) 
+      real(kind = RKIND), intent(in)    :: crysNewStateVars(this%fNumVarsPerGrn) 
       integer(kind = IKIND), intent(in) :: stage
 
-
-      this%fFTotOld = FTotOld
-      this%fFTotNew = FTotNew
-      this%fTempOld = TempOld
-      this%fTempNew = TempNew
-      this%fDt      = dtime
-
-      call this%LoadStateVar( statevOld, nstatv)
-      call this%ResetStateVar(statevNew, nstatv)
+      call this%SetCrysOldState(crysOldStateVars)
+      call this%SetCrysNewState(crysNewStateVars)
 
       call this%PreStep(stage)
       call this%SolveStep(stage)
@@ -514,18 +588,12 @@
 
 
 
-    subroutine Pertubation(this, FTotOld, FTotNew, TempOld, TempNew, statevOld, statevNew, nstatv, dtime, stage)
+    subroutine Pertubation(this, crysOldStateVars, crysNewStateVars, stage)
       use algebra, only : UNITMAT, Ten3333ToA66
 
       class(CrysPlasMatPt) :: this
-      real(kind = RKIND),    intent(in) :: FTotOld(3, 3)
-      real(kind = RKIND),    intent(in) :: FTotNew(3, 3)
-      real(kind = RKIND),    intent(in) :: TempOld
-      real(kind = RKIND),    intent(in) :: TempNew
-      integer(kind = IKIND), intent(in) :: nstatv
-      real(kind = RKIND),    intent(in) :: statevOld(nstatv)
-      real(kind = RKIND),    intent(in) :: statevNew(nstatv)
-      real(kind = RKIND),    intent(in) :: dtime
+      real(kind = RKIND), intent(in)    :: crysOldStateVars(this%fNumVarsPerGrn) 
+      real(kind = RKIND), intent(in)    :: crysNewStateVars(this%fNumVarsPerGrn) 
       integer(kind = IKIND), intent(in) :: stage
 
       real(kind = RKIND), parameter :: kEpsIncPer  = 5.0d-5
@@ -554,8 +622,8 @@
 
       if (this%fNewDt < 1.0d0) return
 
-      sigCvg    = this%fStress
-      rplCvg    = this%fRpl
+      sigCvg    = this%fCrysSig
+      rplCvg    = this%fCrysRpl
       dGammaCvg = this%fDGamma
 
       ! General loop on the 6 perturbations to obtain Jacobian
@@ -574,18 +642,18 @@
         FTotInc(idx1, idx2) = FTotInc(idx1, idx2) + dltEpsPer(idx1, idx2) 
         if (idx1 /= idx2) FtotInc(idx2, idx1) = FtotInc(idx1, idx2)
 
-        FTotPer = matmul(FTotInc, FTotNew)
-        call this%UpdateStress(FTotOld, FTotPer, tempOld, tempNew, statevOld, statevNew, nstatv, dtime, stage)
-        sigEpsPer = this%fStress
-        rplEpsPer = this%fRpl
+        FTotPer = matmul(FTotInc, this%fFTotNew)
+        call this%UpdateStress(crysOldStateVars, crysNewStateVars, stage)
+        sigEpsPer = this%fCrysSig
+        rplEpsPer = this%fCrysRpl
 
         if (this%fNewDt < 1.0d0) then
-          this%fDSigDEps = ten3333ToA66(this%fCijkl)
-          this%fDRplDEps = 0.0d0
+          this%fCrysCijkl    = ten3333ToA66(this%fCijkl)
+          this%fCrysDRplDEps = 0.0d0
           exit
         else
-          this%fDSigDEps(:, iEpsPer) = (sigEpsPer - sigCvg)/kEpsIncPer
-          this%fDRplDEps(iEpsPer)    = (rplEpsPer - rplCvg)/kEpsIncPer 
+          this%fCrysCijkl(:, iEpsPer) = (sigEpsPer - sigCvg)/kEpsIncPer
+          this%fCrysDRplDEps(iEpsPer) = (rplEpsPer - rplCvg)/kEpsIncPer 
         end if
 
       end do
@@ -600,13 +668,13 @@
    !   this%fDGamma = dGammaCvg
    !   tempPer = tempNew + kTempIncPer
    !   call this%UpdateStress(FTotOld, FTotNew, tempOld, tempPer, statevOld, statevNew, nstatv, dtime, stage)
-   !   sigTempPerPlus = this%fStress
+   !   sigTempPerPlus = this%fCrysSig
    !   rplTempPerPlus = this%fRpl
 
    !   this%fDGamma = dGammaCvg
    !   tempPer = tempNew - kTempIncPer
    !   call this%UpdateStress(FTotOld, FTotNew, tempOld, tempPer, statevOld, statevNew, nstatv, dtime, stage)
-   !   sigTempPerMinus = this%fStress
+   !   sigTempPerMinus = this%fCrysSig
    !   rplTempPerMinus = this%fRpl
 
    !   if (this%fNewDt < 1.0d0) then
@@ -617,7 +685,7 @@
    !     this%fDRplDTemp = (rplTempPerPlus - rplTempPerMinus)/(2.0*kTempIncPer)
    !   end if
 
-   !   this%fStress = sigCvg 
+   !   this%fCrysSig = sigCvg 
    !   this%fRpl    = RplCvg 
 
     end subroutine Pertubation
@@ -774,21 +842,19 @@
      ! elsGrn    = this%GreenStrain(matmul(this%fFElsNew, matInv(FThNew)))
       elsGrn    = this%GreenStrain(this%fFElsNew)
       sigPK2    = this%ElasticStress(elsGrn - (FThNew - UNITMAT))
-      call polarDcmp(this%fFElsNew, RR, UU)
-      sigCauchy = multQBQt(sigPK2, RR)
-   !   sigCauchy = multQBQt(sigPK2, this%fFElsNew)
-   !   det       = matDet(this%fFElsNew)
-   !   sigCauchy = sigCauchy/det
+      sigCauchy = multQBQt(sigPK2, this%fFElsNew)
+      det       = matDet(this%fFElsNew)
+      sigCauchy = sigCauchy/det
 
       idxi = (/1, 2, 3, 1, 1, 2/)
       idxj = (/1, 2, 3, 2, 3, 3/)
       do i = 1, 6
-        this%fStress(i) = sigCauchy(idxi(i), idxj(i))
+        this%fCrysSig(i) = sigCauchy(idxi(i), idxj(i))
       end do
       
       this%fTauResl  = this%ResolvedSlipStress(sigPK2)
       this%fGammaDot = this%fCrysPlasMat%GetSlipRate(this%fTauResl, this%fTauCritNew, this%fTempNew)
-      this%fRpl      = disFrc*sum(dabs(this%fTauResl*this%fGammaDot))
+      this%fCrysRpl  = disFrc*sum(dabs(this%fTauResl*this%fGammaDot))
       
       
     end subroutine PostStep

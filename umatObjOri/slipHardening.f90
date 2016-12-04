@@ -69,7 +69,7 @@
       class(SlipHard) :: this
       integer(kind = IKIND), intent(in) :: fID
       integer(kind = IKIND), intent(in) :: numSlipSet
-      integer(kind = IKIND), intent(in) :: SlipSet(this%fNumSlipSys)
+      integer(kind = IKIND), intent(in) :: SlipSet(2, this%fNumSlipSys)
       integer(kind = IKIND), intent(in) :: kNumMatProp
       integer(kind = IKIND), intent(in) :: kNumMatAux
   
@@ -87,7 +87,7 @@
       end do
   
       do i = 1, this%fNumSlipSys
-        this%fMatProp(i, 1:kNumMatProp) = auxMatProp(slipSet(i), 1:kNumMatProp)
+        this%fMatProp(i, 1:kNumMatProp) = auxMatProp(slipSet(1, i), 1:kNumMatProp)
       end do
   
   
@@ -184,7 +184,7 @@
       logical(kind = LKIND), intent(in) :: isTempDep
       integer(kind = IKIND), intent(in) :: numSlipSys
       integer(kind = IKIND), intent(in) :: numSlipSet
-      integer(kind = IKIND), intent(in) :: slipSet(numSlipSys)
+      integer(kind = IKIND), intent(in) :: slipSet(2, numSlipSys)
       type(SlipHardAN), pointer         :: this
   
       integer(kind = IKIND), parameter :: kNumMatProp = 3
@@ -208,7 +208,7 @@
 
       do i = 1, this%fNumSlipSys
         do j = 1, this%fNumSlipSys
-          this%fQab(i, j) = auxQab(slipSet(i), slipSet(j))
+          this%fQab(i, j) = auxQab(slipSet(1, i), slipSet(1, j))
         end do
       end do
   
@@ -314,7 +314,7 @@
       logical(kind = LKIND), intent(in) :: isTempDep
       integer(kind = IKIND), intent(in) :: numSlipSys
       integer(kind = IKIND), intent(in) :: numSlipSet
-      integer(kind = IKIND), intent(in) :: slipSet(numSlipSys)
+      integer(kind = IKIND), intent(in) :: slipSet(2, numSlipSys)
       type(SlipHardVT), pointer         :: this
   
       integer(kind = IKIND), parameter :: kNumMatProp = 4
@@ -336,7 +336,7 @@
   
       do i = 1, this%fNumSlipSys
         do j = 1, this%fNumSlipSys
-          this%fQab(i, j) = auxQab(slipSet(i), slipSet(j))
+          this%fQab(i, j) = auxQab(slipSet(1, i), slipSet(1, j))
         end do
       end do
   
@@ -442,7 +442,7 @@
       logical(kind = LKIND), intent(in) :: isTempDep
       integer(kind = IKIND), intent(in) :: numSlipSys
       integer(kind = IKIND), intent(in) :: numSlipSet
-      integer(kind = IKIND), intent(in) :: slipSet(numSlipSys)
+      integer(kind = IKIND), intent(in) :: slipSet(2, numSlipSys)
       type(SlipHardVK), pointer         :: this
   
       integer(kind = IKIND), parameter  :: dummyNumSlipSet = 1
@@ -612,7 +612,7 @@
       logical(kind = LKIND), intent(in) :: isTempDep
       integer(kind = IKIND), intent(in) :: numSlipSys
       integer(kind = IKIND), intent(in) :: numSlipSet
-      integer(kind = IKIND), intent(in) :: slipSet(numSlipSys)
+      integer(kind = IKIND), intent(in) :: slipSet(2, numSlipSys)
       type(SlipHardFA), pointer         :: this
   
       integer(kind = IKIND), parameter :: kNumMatProp = 5
@@ -639,6 +639,7 @@
       do i = 1, this%fNumSlipSys
         do j = 1, this%fNumSlipSys
     !      this%fQab(i, j) = auxQab(slipSet(i), slipSet(j))
+    !      if (slipSet(2, i) == slipSet(2, j)) then
           if (i == j) then
             this%fQab(i, j) = 1.0d0
           else
@@ -659,7 +660,7 @@
         read(line, *) (auxMatProp(i, j), j = 1, kNumMatProp)
         if (auxMatProp(i, 1) < 0.0d0) then
           this%fConstThCRSS = .true.
-          auxMatProp(i, 1) = -auxMatProp(i, 1)
+          auxMatProp(i, 1)  = -auxMatProp(i, 1)
         end if
         if (auxMatProp(i, 5) < 0.0d0) then
           this%fTempDepSaturCRSS = .true.
@@ -673,7 +674,7 @@
       end if
 
       do i = 1, this%fNumSlipSys
-        this%fMatProp(i, 1:kNumMatProp) = auxMatProp(slipSet(i), 1:kNumMatProp)
+        this%fMatProp(i, 1:kNumMatProp) = auxMatProp(slipSet(1, i), 1:kNumMatProp)
       end do
   
       if (this%fTempDepSaturCRSS) then
@@ -686,7 +687,7 @@
 
         this%fSaturCRSS(:, 1) = auxSaturCRSS(:, 1)
         do i = 1, this%fNumSlipSys
-          this%fSaturCRSS(:, i+1) = auxSaturCRSS(:, slipSet(i)+1)
+          this%fSaturCRSS(:, i+1) = auxSaturCRSS(:, slipSet(1, i)+1)
         end do
 
         if (allocated(auxSaturCRSS)) deallocate(auxSaturCRSS)
@@ -741,12 +742,6 @@
       h0         = this%fMatProp(:, 3)
       r1         = this%fMatProp(:, 4)
 
-      
-      if (this%fConstThCRSS) then
-        tauCritAT = tauCrit - tauCritT0
-      else
-        tauCritAT = tauCrit
-      end if
 
       if (this%fTempDepSaturCRSS) then
          tauSatur = this%CurSaturCRSS(temp)
@@ -754,7 +749,12 @@
          tauSatur = this%fMatProp(:, 5)
       end if
 
-      aux1 = 1.0d0 - tauCritAT/tauSatur
+      
+      if (this%fConstThCRSS) then
+        aux1 = 1.0d0 - (tauCrit - tauCritT0)/tauSatur
+      else
+        aux1 = 1.0d0 - tauCrit/tauSatur
+      end if
       aux2 = h0*(abs(aux1)**r1)*sign(1.0d0, aux1)
       do ii = 1, this%fNumSlipSys
         do jj = 1, this%fNumSlipSys

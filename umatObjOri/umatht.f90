@@ -58,7 +58,6 @@
       dfdg(i, i) = -cond
     end do
 
-
   end subroutine
 
 

@@ -5,14 +5,7 @@ module utils
   integer(kind = 4), parameter :: IKIND = 4  
   integer(kind = 4), parameter :: RKIND = 8
   integer(kind = 4), parameter :: LKIND = 1
-  
-  character(len = *),    parameter :: CRYS_FILE_NAME   = "crystal.prop"
-  integer(kind = IKIND), parameter :: CRYS_FILE_ID     = 74 
 
-
-  integer(kind = IKIND), parameter :: UPDSIG = 1
-  integer(kind = IKIND), parameter :: UPDJAC = 2
- 
 contains
 
   subroutine ReadLine(fID, line)

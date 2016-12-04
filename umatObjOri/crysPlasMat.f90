@@ -241,7 +241,7 @@
   
 
       integer(kind = IKIND) :: nSlipSet
-      integer(kind = IKIND), allocatable :: theSlipSet(:)
+      integer(kind = IKIND), allocatable :: theSlipSet(:, :)
 
       logical(kind = 4)     :: elasPropTempDep
       integer(kind = IKIND) :: elasPropOrder
@@ -319,7 +319,7 @@
 
       ! Slip Hardening
       nSlipSet = this%fSlipGeom%NumSlipSet()
-      allocate(theSlipSet(this%fNumSlipSys))
+      allocate(theSlipSet(2, this%fNumSlipSys))
       theSlipSet = this%fSlipGeom%SlipSet()
 
       call ReadLine(fID, line)
